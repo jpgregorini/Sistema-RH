@@ -12,6 +12,11 @@ const geist = Geist({
 export const metadata: Metadata = {
   title: "Novalog RH",
   description: "Sistema de Recursos Humanos - Novalog Logística",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({

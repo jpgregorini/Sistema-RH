@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Sidebar } from "@/components/sidebar";
 import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase-browser";
@@ -54,6 +55,16 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <main className="ml-64 min-h-screen">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-end border-b border-slate-200 bg-white/90 px-8 backdrop-blur">
+          <Image
+            src="/logo.png"
+            alt="Novalog"
+            width={140}
+            height={40}
+            className="h-9 w-auto object-contain"
+            priority
+          />
+        </header>
         <div className="p-8">
           <Suspense fallback={<PageLoader />}>
             {children}

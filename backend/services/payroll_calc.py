@@ -35,11 +35,11 @@ def calculate_payroll(person_type: str, person_id: str, month: str) -> dict:
 
 
 def _get_person_full(db, person_type: str, person_id: str) -> dict:
-    """Get person with benefit values and pix_key."""
+    """Get person with benefit values, base_salary and pix_key."""
     table = "drivers" if person_type == "driver" else "employees"
     result = (
         db.table(table)
-        .select("name, cpf, pix_key, beneficio_alimentacao, beneficio_transporte, beneficio_refeicao")
+        .select("name, cpf, pix_key, base_salary, beneficio_alimentacao, beneficio_transporte, beneficio_refeicao")
         .eq("id", person_id)
         .single()
         .execute()
@@ -172,7 +172,11 @@ def _calculate_driver_payroll(db, driver_id: str, month: str) -> dict:
             })
         trip_details.append(trip_info)
 
-    gross_pay = sum(ce["total_earning"] for ce in company_earnings.values())
+    total_commission = sum(ce["total_earning"] for ce in company_earnings.values())
+
+    # Optional monthly base salary (commission + salary, or commission only if null)
+    base_salary = float(person.get("base_salary") or 0)
+    gross_pay = total_commission + base_salary
 
     # INSS
     inss = calculate_inss(gross_pay)
@@ -196,6 +200,8 @@ def _calculate_driver_payroll(db, driver_id: str, month: str) -> dict:
         "total_advances": adv["total_advances"],
         "net_pay": net_pay,
         "breakdown": {
+            "base_salary": round(base_salary, 2),
+            "total_commission": round(total_commission, 2),
             "company_earnings": company_earnings,
             "trips": trip_details,
             "advances": adv["advances_by_type"],

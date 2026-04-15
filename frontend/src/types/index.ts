@@ -25,6 +25,7 @@ export interface Driver {
   pix_key: string | null;
   active: boolean;
   notes: string | null;
+  base_salary: number | null;
   beneficio_alimentacao: number;
   beneficio_transporte: number;
   beneficio_refeicao: number;

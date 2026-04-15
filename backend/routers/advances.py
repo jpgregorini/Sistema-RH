@@ -99,13 +99,16 @@ def create_advance(data: AdvanceCreate):
             )
 
     elif data.advance_type.value == "salario":
+        base_salary = float(person.get("base_salary") or 0)
         if data.person_type.value == "employee":
-            base_salary = float(person.get("base_salary") or 0)
             if base_salary <= 0:
                 raise HTTPException(
                     status_code=400,
                     detail="Funcionário não possui salário base cadastrado.",
                 )
+        # For drivers, base_salary is optional. If set, enforce its limit;
+        # if unset, allow any amount (driver is paid on commission only).
+        if base_salary > 0:
             month_advances = _get_month_advances(
                 db, data.person_type.value, data.person_id, payroll_month
             )

@@ -50,6 +50,7 @@ class DriverCreate(BaseModel):
     phone: str | None = None
     pix_key: str | None = None
     notes: str | None = None
+    base_salary: float | None = None
     commissions: list[CommissionRate] = []
     beneficio_alimentacao: float = 0
     beneficio_transporte: float = 0
@@ -69,6 +70,7 @@ class DriverUpdate(BaseModel):
     pix_key: str | None = None
     notes: str | None = None
     active: bool | None = None
+    base_salary: float | None = None
     commissions: list[CommissionRate] | None = None
     beneficio_alimentacao: float | None = None
     beneficio_transporte: float | None = None

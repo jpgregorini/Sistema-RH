@@ -11,6 +11,47 @@
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
   --font-heading: var(--font-sans);
+
+  /* ============================================
+     NOVALOG BRAND COLORS
+     Primary: #2575bd (blue)
+     Accent:  #ed6b27 (orange)
+     White, and Black as highlight.
+     Tailwind's blue-* and orange-* palettes are
+     remapped to the brand scales below so all
+     existing utility classes inherit the identity.
+     ============================================ */
+  --color-brand-blue: #2575bd;
+  --color-brand-orange: #ed6b27;
+
+  --color-blue-50:  #eff5fc;
+  --color-blue-100: #dbe9f6;
+  --color-blue-200: #bcd5ec;
+  --color-blue-300: #8cb9e0;
+  --color-blue-400: #5fa0d4;
+  --color-blue-500: #3b8ad1;
+  --color-blue-600: #2575bd;
+  --color-blue-700: #1c5a93;
+  --color-blue-800: #16436d;
+  --color-blue-900: #102f4c;
+
+  --color-orange-50:  #fef3ea;
+  --color-orange-100: #fde2d0;
+  --color-orange-200: #fbc5a1;
+  --color-orange-300: #f7a472;
+  --color-orange-400: #f28551;
+  --color-orange-500: #ed6b27;
+  --color-orange-600: #d25619;
+  --color-orange-700: #a84213;
+  --color-orange-800: #7f310e;
+  --color-orange-900: #57210a;
+
+  /* Amber used to flag AI/action accents — remap to brand orange so
+     the visual language stays on-brand without touching call sites. */
+  --color-amber-400: #f28551;
+  --color-amber-500: #ed6b27;
+  --color-amber-600: #d25619;
+  --color-amber-700: #a84213;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -56,18 +97,19 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  /* Brand blue #2575bd as primary. Black (#0a0a0a) reserved for highlights. */
+  --primary: #2575bd;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: #ed6b27;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #2575bd;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

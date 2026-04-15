@@ -33,6 +33,9 @@ export function DriverForm({ driver }: DriverFormProps) {
   const [phone, setPhone] = useState(driver?.phone || "");
   const [pixKey, setPixKey] = useState(driver?.pix_key || "");
   const [payday, setPayday] = useState(driver?.payday || 10);
+  const [baseSalary, setBaseSalary] = useState(
+    driver?.base_salary ? String(driver.base_salary) : ""
+  );
   const [notes, setNotes] = useState(driver?.notes || "");
 
   const [commissions, setCommissions] = useState<
@@ -79,6 +82,7 @@ export function DriverForm({ driver }: DriverFormProps) {
         phone: phone || null,
         pix_key: pixKey || null,
         payday,
+        base_salary: baseSalary ? Number(baseSalary) : null,
         notes: notes || null,
         photo_url: photoUrl || null,
         contract_file_url: contractUrl || null,
@@ -291,6 +295,21 @@ export function DriverForm({ driver }: DriverFormProps) {
                     onChange={(e) => setPayday(Number(e.target.value))}
                     required
                   />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="base_salary">Salário Mensal (R$)</Label>
+                  <Input
+                    id="base_salary"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={baseSalary}
+                    onChange={(e) => setBaseSalary(e.target.value)}
+                    placeholder="Opcional — preencha apenas se o motorista recebe salário fixo além da comissão"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Deixe em branco para motoristas que recebem somente por comissão.
+                  </p>
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="notes">Observações</Label>
