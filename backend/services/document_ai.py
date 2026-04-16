@@ -9,13 +9,17 @@ def extract_driver_info(file_bytes: bytes, content_type: str) -> dict:
 
     b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
 
-    # Determine media type
+    # Determine media type and content block kind.
+    # PDFs must use a `document` block — `image` blocks only accept jpeg/png/gif/webp.
     if "pdf" in content_type:
         media_type = "application/pdf"
+        block_type = "document"
     elif "png" in content_type:
         media_type = "image/png"
+        block_type = "image"
     else:
         media_type = "image/jpeg"
+        block_type = "image"
 
     message = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -25,7 +29,7 @@ def extract_driver_info(file_bytes: bytes, content_type: str) -> dict:
                 "role": "user",
                 "content": [
                     {
-                        "type": "image",
+                        "type": block_type,
                         "source": {
                             "type": "base64",
                             "media_type": media_type,
