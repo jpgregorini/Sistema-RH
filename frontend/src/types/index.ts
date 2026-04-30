@@ -99,6 +99,11 @@ export interface SalaryAdvance {
   payroll_month: string;
   notes: string | null;
   created_at: string;
+  installment_group_id?: string | null;
+  installment_index?: number | null;
+  installment_total?: number | null;
+  person_name_snapshot?: string | null;
+  person_cpf_snapshot?: string | null;
 }
 
 export interface BenefitBreakdown {
@@ -122,6 +127,9 @@ export interface PayrollRecord {
   total_deductions: number;
   total_advances: number;
   net_pay: number;
+  included: boolean;
+  person_name_snapshot?: string | null;
+  person_cpf_snapshot?: string | null;
   breakdown: {
     company_earnings?: Record<string, { total_value: number; total_earning: number; pct: number }>;
     advances?: Record<string, { amount: number; date: string; category?: string; product_name?: string }[]>;

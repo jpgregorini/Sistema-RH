@@ -75,6 +75,11 @@ def _number_to_words_brl(value: float) -> str:
     return result
 
 
+def _format_payroll_month(payroll_month: str) -> str:
+    year, month = payroll_month.split("-")
+    return f"{MONTHS_PT.get(int(month), month)} de {year}"
+
+
 def generate_advance_pdf(
     name: str,
     cpf: str,
@@ -82,6 +87,7 @@ def generate_advance_pdf(
     advance_date: date,
     payday: int,
     payroll_month: str,
+    installments: list[dict] | None = None,
 ) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -109,18 +115,27 @@ def generate_advance_pdf(
     c.setFont("Helvetica", 10)
 
     amount_words = _number_to_words_brl(amount)
-    year_month = payroll_month.split("-")
-    month_name = MONTHS_PT.get(int(year_month[1]), year_month[1])
-    month_year_str = f"{month_name} de {year_month[0]}"
+    month_year_str = _format_payroll_month(payroll_month)
 
-    body_text = (
-        f"Eu, {name}, portador(a) do CPF {cpf}, declaro ter recebido da empresa "
-        f"Novalog Logística o valor de R$ {amount:,.2f} ({amount_words}) a título de "
-        f"adiantamento salarial, a ser descontado integralmente na folha de pagamento "
-        f"referente ao mês de {month_year_str}, com vencimento no dia {payday} do referido mês."
-    )
+    has_installments = installments and len(installments) > 1
+    if has_installments:
+        n = len(installments)
+        first_amount = float(installments[0]["amount"])
+        body_text = (
+            f"Eu, {name}, portador(a) do CPF {cpf}, declaro ter recebido da empresa "
+            f"Novalog Logística o valor de R$ {amount:,.2f} ({amount_words}) a título de "
+            f"adiantamento salarial, parcelado em {n}x de aproximadamente "
+            f"R$ {first_amount:,.2f}, a ser descontado conforme o cronograma abaixo, "
+            f"com vencimento no dia {payday} de cada mês de referência."
+        )
+    else:
+        body_text = (
+            f"Eu, {name}, portador(a) do CPF {cpf}, declaro ter recebido da empresa "
+            f"Novalog Logística o valor de R$ {amount:,.2f} ({amount_words}) a título de "
+            f"adiantamento salarial, a ser descontado integralmente na folha de pagamento "
+            f"referente ao mês de {month_year_str}, com vencimento no dia {payday} do referido mês."
+        )
 
-    # Word wrap
     from reportlab.lib.utils import simpleSplit
     margin = 3 * cm
     text_width = width - 2 * margin
@@ -129,13 +144,28 @@ def generate_advance_pdf(
         c.drawString(margin, y, line)
         y -= 0.5 * cm
 
+    if has_installments:
+        y -= 0.3 * cm
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(margin, y, "Cronograma de descontos:")
+        y -= 0.5 * cm
+        c.setFont("Helvetica", 10)
+        for inst in installments:
+            line = (
+                f"  Parcela {inst['index']}/{len(installments)} — "
+                f"R$ {float(inst['amount']):,.2f} — "
+                f"folha de {_format_payroll_month(inst['payroll_month'])}"
+            )
+            c.drawString(margin, y, line)
+            y -= 0.5 * cm
+
     y -= 0.5 * cm
     c.drawString(
         margin, y,
-        "Ao assinar este termo, autorizo expressamente o desconto do valor acima "
+        "Ao assinar este termo, autorizo expressamente o desconto do(s) valor(es) "
     )
     y -= 0.5 * cm
-    c.drawString(margin, y, "mencionado em minha remuneração.")
+    c.drawString(margin, y, "mencionado(s) em minha remuneração.")
 
     # Date
     y -= 2 * cm

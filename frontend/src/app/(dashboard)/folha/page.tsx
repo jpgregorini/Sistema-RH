@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,26 @@ export default function FolhaPage() {
   const driverPayroll = payroll.filter((p) => p.person_type === "driver");
   const employeePayroll = payroll.filter((p) => p.person_type === "employee");
 
+  const includeMutation = useMutation({
+    mutationFn: ({ id, included }: { id: string; included: boolean }) =>
+      api.patch(`/api/payroll/${id}`, { included }),
+    onMutate: async ({ id, included }) => {
+      await queryClient.cancelQueries({ queryKey: ["payroll", month] });
+      const previous = queryClient.getQueryData<PayrollRecord[]>(["payroll", month]);
+      queryClient.setQueryData<PayrollRecord[]>(["payroll", month], (old) =>
+        (old || []).map((p) => (p.id === id ? { ...p, included } : p))
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(["payroll", month], ctx.previous);
+      toast.error("Erro ao atualizar inclusão.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll", month] });
+    },
+  });
+
   const calculateAll = async () => {
     setCalculating(true);
     try {
@@ -71,9 +91,12 @@ export default function FolhaPage() {
     setCalculating(false);
   };
 
-  const exportExcel = () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
-    window.open(`${apiUrl}/api/payroll/export?month=${month}`, "_blank");
+  const exportExcel = (type: "salary" | "benefits") => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    window.open(
+      `${apiUrl}/api/payroll/export?month=${month}&type=${type}`,
+      "_blank"
+    );
   };
 
   const toggleRow = (id: string) => {
@@ -96,6 +119,7 @@ export default function FolhaPage() {
 
     const totals = records.reduce(
       (acc, r) => {
+        if (!r.included) return acc;
         const advTotals = r.breakdown?.advance_totals || {};
         const salaryAdv = Number(advTotals.salario || 0) + Number(advTotals.produtos || 0);
         return {
@@ -113,6 +137,7 @@ export default function FolhaPage() {
         <TableHeader>
           <TableRow>
             <TableHead className="w-10"></TableHead>
+            <TableHead className="w-12">Incluir</TableHead>
             <TableHead>Nome</TableHead>
             <TableHead>CPF</TableHead>
             <TableHead className="text-right">Salário Bruto</TableHead>
@@ -132,22 +157,41 @@ export default function FolhaPage() {
             const gross = Number(record.gross_pay);
             const netSalary = gross - inss - salaryAdv;
             const pixKey = breakdown?.pix_key || record.pix_key || "";
+            const excluded = !record.included;
 
             return (
               <>
                 <TableRow
                   key={record.id}
-                  className="cursor-pointer hover:bg-slate-50"
-                  onClick={() => toggleRow(record.id)}
+                  className={`hover:bg-slate-50 ${excluded ? "opacity-50" : ""}`}
                 >
-                  <TableCell>
+                  <TableCell
+                    className="cursor-pointer"
+                    onClick={() => toggleRow(record.id)}
+                  >
                     {isExpanded ? (
                       <ChevronDown className="h-4 w-4 text-slate-400" />
                     ) : (
                       <ChevronRight className="h-4 w-4 text-slate-400" />
                     )}
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer accent-emerald-600"
+                      checked={record.included}
+                      onChange={(e) =>
+                        includeMutation.mutate({
+                          id: record.id,
+                          included: e.target.checked,
+                        })
+                      }
+                    />
+                  </TableCell>
+                  <TableCell
+                    className={`font-medium cursor-pointer ${excluded ? "line-through" : ""}`}
+                    onClick={() => toggleRow(record.id)}
+                  >
                     {record.person_name || "—"}
                   </TableCell>
                   <TableCell className="text-sm text-slate-600">
@@ -171,7 +215,7 @@ export default function FolhaPage() {
                 </TableRow>
                 {isExpanded && breakdown && (
                   <TableRow key={`${record.id}-detail`}>
-                    <TableCell colSpan={8} className="bg-slate-50">
+                    <TableCell colSpan={9} className="bg-slate-50">
                       <div className="px-8 py-3 space-y-3 text-sm">
                         {breakdown.company_earnings && (
                           <div>
@@ -231,8 +275,8 @@ export default function FolhaPage() {
           })}
 
           <TableRow className="bg-slate-100 font-bold">
-            <TableCell></TableCell>
-            <TableCell>TOTAL</TableCell>
+            <TableCell colSpan={2}></TableCell>
+            <TableCell>TOTAL (incluídos)</TableCell>
             <TableCell></TableCell>
             <TableCell className="text-right">{formatBRL(totals.gross)}</TableCell>
             <TableCell className="text-right text-red-600">
@@ -262,6 +306,7 @@ export default function FolhaPage() {
 
     const totals = records.reduce(
       (acc, r) => {
+        if (!r.included) return acc;
         const b = r.breakdown?.benefit;
         const alim = b?.alimentacao_valor ?? Number(r.beneficio_alimentacao || 0);
         const trans = b?.transporte_valor ?? Number(r.beneficio_transporte || 0);
@@ -289,6 +334,7 @@ export default function FolhaPage() {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-12">Incluir</TableHead>
             <TableHead>Nome</TableHead>
             <TableHead className="text-right">Benefício Bruto</TableHead>
             <TableHead className="text-right">Alimentação</TableHead>
@@ -311,10 +357,24 @@ export default function FolhaPage() {
             const dedRef = b?.refeicao_deducao ?? 0;
             const gross = alim + trans + ref;
             const net = gross - dedAlim - dedTrans - dedRef;
+            const excluded = !record.included;
 
             return (
-              <TableRow key={record.id}>
-                <TableCell className="font-medium">
+              <TableRow key={record.id} className={excluded ? "opacity-50" : ""}>
+                <TableCell>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer accent-emerald-600"
+                    checked={record.included}
+                    onChange={(e) =>
+                      includeMutation.mutate({
+                        id: record.id,
+                        included: e.target.checked,
+                      })
+                    }
+                  />
+                </TableCell>
+                <TableCell className={`font-medium ${excluded ? "line-through" : ""}`}>
                   {record.person_name || "—"}
                 </TableCell>
                 <TableCell className="text-right">{formatBRL(gross)}</TableCell>
@@ -338,7 +398,8 @@ export default function FolhaPage() {
           })}
 
           <TableRow className="bg-slate-100 font-bold">
-            <TableCell>TOTAL</TableCell>
+            <TableCell></TableCell>
+            <TableCell>TOTAL (incluídos)</TableCell>
             <TableCell className="text-right">{formatBRL(totals.gross)}</TableCell>
             <TableCell className="text-right">{formatBRL(totals.alim)}</TableCell>
             <TableCell className="text-right text-red-600">
@@ -396,12 +457,21 @@ export default function FolhaPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={exportExcel}
+            onClick={() => exportExcel("salary")}
             disabled={payroll.length === 0}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            Exportar Excel
+            Exportar Salários
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => exportExcel("benefits")}
+            disabled={payroll.length === 0}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Benefícios
           </Button>
         </div>
       </div>

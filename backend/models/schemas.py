@@ -161,6 +161,11 @@ class AdvanceCreate(BaseModel):
     advance_date: date | None = None
     payroll_month: str | None = None
     notes: str | None = None
+    installments: int = 1
+
+
+class PayrollUpdate(BaseModel):
+    included: bool
 
 
 # --- Payroll ---

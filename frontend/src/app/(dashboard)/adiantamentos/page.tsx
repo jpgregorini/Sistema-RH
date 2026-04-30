@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase-browser";
@@ -49,6 +49,8 @@ const BENEFICIO_LABELS: Record<BeneficioCategory, string> = {
   refeicao: "Refeição",
 };
 
+const INSTALLMENT_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
+
 export default function AdiantamentosPage() {
   const queryClient = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -63,6 +65,8 @@ export default function AdiantamentosPage() {
   const [advanceDate, setAdvanceDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
+  const [payrollMonth, setPayrollMonth] = useState(currentMonth);
+  const [installments, setInstallments] = useState(1);
   const [notes, setNotes] = useState("");
 
   const { data: drivers = [] } = useQuery<Driver[]>({
@@ -80,9 +84,45 @@ export default function AdiantamentosPage() {
     queryFn: () => api.get(`/api/advances?month=${month}`),
   });
 
-  const people = personType === "driver" ? drivers : employees;
+  // Fetch advances of the selected person in the selected payrollMonth
+  // — used to compute the remaining benefit balance (#2 fix).
+  const { data: personMonthAdvances = [] } = useQuery<SalaryAdvance[]>({
+    queryKey: ["advances-person-month", personType, personId, payrollMonth],
+    queryFn: () =>
+      api.get(
+        `/api/advances?person_type=${personType}&person_id=${personId}&month=${payrollMonth}`
+      ),
+    enabled: Boolean(personId && payrollMonth),
+  });
 
+  const people = personType === "driver" ? drivers : employees;
   const selectedPerson = people.find((p) => p.id === personId);
+
+  const benefitLimit = selectedPerson
+    ? beneficioCategory === "alimentacao"
+      ? selectedPerson.beneficio_alimentacao
+      : beneficioCategory === "transporte"
+      ? selectedPerson.beneficio_transporte
+      : selectedPerson.beneficio_refeicao
+    : 0;
+
+  const benefitUsed = personMonthAdvances
+    .filter(
+      (a) =>
+        a.advance_type === "beneficio" &&
+        a.beneficio_category === beneficioCategory
+    )
+    .reduce((sum, a) => sum + Number(a.amount), 0);
+
+  const benefitRemaining = Math.max(0, Number(benefitLimit) - benefitUsed);
+
+  const installmentBreakdown = useMemo(() => {
+    const total = Number(amount) || 0;
+    if (!total || installments <= 1) return null;
+    const base = Math.round((total / installments) * 100) / 100;
+    const last = Math.round((total - base * (installments - 1)) * 100) / 100;
+    return { base, last };
+  }, [amount, installments]);
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -92,7 +132,8 @@ export default function AdiantamentosPage() {
         advance_type: advanceType,
         amount: Number(amount),
         advance_date: advanceDate,
-        payroll_month: month,
+        payroll_month: payrollMonth,
+        installments,
         notes: notes || null,
       };
       if (advanceType === "beneficio") {
@@ -105,11 +146,13 @@ export default function AdiantamentosPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["advances"] });
+      queryClient.invalidateQueries({ queryKey: ["advances-person-month"] });
       toast.success("Adiantamento registrado.");
       setPersonId("");
       setAmount("");
       setNotes("");
       setProductName("");
+      setInstallments(1);
     },
     onError: (err: Error) => {
       try {
@@ -125,6 +168,7 @@ export default function AdiantamentosPage() {
     mutationFn: (id: string) => api.delete(`/api/advances/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["advances"] });
+      queryClient.invalidateQueries({ queryKey: ["advances-person-month"] });
       toast.success("Adiantamento removido.");
     },
     onError: () => toast.error("Erro ao remover adiantamento."),
@@ -132,9 +176,13 @@ export default function AdiantamentosPage() {
 
   const getPersonName = (a: SalaryAdvance) => {
     if (a.person_type === "driver") {
-      return drivers.find((x) => x.id === a.person_id)?.name || "—";
+      const d = drivers.find((x) => x.id === a.person_id);
+      if (d) return d.name;
+    } else {
+      const e = employees.find((x) => x.id === a.person_id);
+      if (e) return e.name;
     }
-    return employees.find((x) => x.id === a.person_id)?.name || "—";
+    return a.person_name_snapshot || "—";
   };
 
   const getAdvanceTypeLabel = (adv: SalaryAdvance) => {
@@ -307,14 +355,11 @@ export default function AdiantamentosPage() {
                 </Select>
                 {selectedPerson && (
                   <p className="text-xs text-slate-500">
-                    Limite:{" "}
-                    {formatBRL(
-                      beneficioCategory === "alimentacao"
-                        ? selectedPerson.beneficio_alimentacao
-                        : beneficioCategory === "transporte"
-                        ? selectedPerson.beneficio_transporte
-                        : selectedPerson.beneficio_refeicao
-                    )}
+                    Limite: {formatBRL(benefitLimit)} · Usado:{" "}
+                    {formatBRL(benefitUsed)} ·{" "}
+                    <span className="font-semibold text-slate-700">
+                      Disponível: {formatBRL(benefitRemaining)}
+                    </span>
                   </p>
                 )}
               </div>
@@ -343,12 +388,60 @@ export default function AdiantamentosPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Data</Label>
+              <Label>Data do Adiantamento</Label>
               <Input
                 type="date"
                 value={advanceDate}
                 onChange={(e) => setAdvanceDate(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Mês de Desconto</Label>
+              <Input
+                type="month"
+                value={payrollMonth}
+                onChange={(e) => setPayrollMonth(e.target.value)}
+              />
+              <p className="text-xs text-slate-500">
+                Folha em que o desconto será aplicado.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Parcelas</Label>
+              <Select
+                value={String(installments)}
+                onValueChange={(v) => setInstallments(Number(v) || 1)}
+              >
+                <SelectTrigger>
+                  <SelectValue>
+                    {(v: string | null) => {
+                      const n = Number(v) || 1;
+                      const total = Number(amount) || 0;
+                      if (!total) return `${n}x`;
+                      const per = total / n;
+                      return `${n}x de ${formatBRL(per)}`;
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {INSTALLMENT_OPTIONS.map((n) => {
+                    const total = Number(amount) || 0;
+                    const label = total
+                      ? `${n}x de ${formatBRL(total / n)}`
+                      : `${n}x`;
+                    return (
+                      <SelectItem key={n} value={String(n)}>
+                        {label}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {installmentBreakdown && (
+                <p className="text-xs text-slate-500">
+                  Última parcela: {formatBRL(installmentBreakdown.last)} (ajuste de centavos).
+                </p>
+              )}
             </div>
             <div className="space-y-2 sm:col-span-2 lg:col-span-3">
               <Label>Observações</Label>
@@ -386,6 +479,7 @@ export default function AdiantamentosPage() {
               <TableHead>Pessoa</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Adiantamento</TableHead>
+              <TableHead>Parcela</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Data</TableHead>
               <TableHead>Contrato</TableHead>
@@ -397,7 +491,7 @@ export default function AdiantamentosPage() {
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-8 text-slate-400"
                 >
                   Carregando...
@@ -406,7 +500,7 @@ export default function AdiantamentosPage() {
             ) : advances.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-8 text-slate-400"
                 >
                   Nenhum adiantamento neste mês.
@@ -431,6 +525,15 @@ export default function AdiantamentosPage() {
                     >
                       {getAdvanceTypeLabel(adv)}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {adv.installment_total && adv.installment_total > 1 ? (
+                      <Badge variant="outline" className="text-xs">
+                        {adv.installment_index}/{adv.installment_total}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {formatBRL(adv.amount)}

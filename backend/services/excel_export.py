@@ -3,7 +3,12 @@ from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 import io
 
 
-def generate_payroll_excel(payroll_data: list[dict], month: str) -> bytes:
+def generate_payroll_excel(
+    payroll_data: list[dict],
+    month: str,
+    sheet_type: str = "all",
+) -> bytes:
+    """sheet_type: 'salary' (only salary sheets), 'benefits' (only benefit sheets), or 'all'."""
     wb = Workbook()
 
     drivers = [p for p in payroll_data if p["person_type"] == "driver"]
@@ -167,34 +172,28 @@ def generate_payroll_excel(payroll_data: list[dict], month: str) -> bytes:
             cell.border = border
 
     # --- Build sheets ---
+    include_salary = sheet_type in ("salary", "all")
+    include_benefits = sheet_type in ("benefits", "all")
 
-    # Sheet 1: Motoristas - Salário
-    ws1 = wb.active
-    if drivers:
-        _write_salary_sheet(ws1, drivers, "Motoristas")
-    else:
-        ws1.title = "Motoristas - Salário"
+    sheets: list[tuple[str, callable, list[dict]]] = []
+    if include_salary:
+        sheets.append(("Motoristas - Salário", _write_salary_sheet, drivers))
+    if include_benefits:
+        sheets.append(("Motoristas - Benefício", _write_benefit_sheet, drivers))
+    if include_salary:
+        sheets.append(("Funcionários - Salário", _write_salary_sheet, employees))
+    if include_benefits:
+        sheets.append(("Funcionários - Benefício", _write_benefit_sheet, employees))
 
-    # Sheet 2: Motoristas - Benefício
-    ws2 = wb.create_sheet()
-    if drivers:
-        _write_benefit_sheet(ws2, drivers, "Motoristas")
-    else:
-        ws2.title = "Motoristas - Benefício"
-
-    # Sheet 3: Funcionários - Salário
-    ws3 = wb.create_sheet()
-    if employees:
-        _write_salary_sheet(ws3, employees, "Funcionários")
-    else:
-        ws3.title = "Funcionários - Salário"
-
-    # Sheet 4: Funcionários - Benefício
-    ws4 = wb.create_sheet()
-    if employees:
-        _write_benefit_sheet(ws4, employees, "Funcionários")
-    else:
-        ws4.title = "Funcionários - Benefício"
+    first = True
+    for fallback_title, writer, data in sheets:
+        ws = wb.active if first else wb.create_sheet()
+        first = False
+        if data:
+            title = fallback_title.split(" - ")[0]
+            writer(ws, data, title)
+        else:
+            ws.title = fallback_title
 
     buffer = io.BytesIO()
     wb.save(buffer)
