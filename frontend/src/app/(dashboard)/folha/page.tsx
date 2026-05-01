@@ -26,7 +26,7 @@ export default function FolhaPage() {
   const queryClient = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [month, setMonth] = useState(currentMonth);
-  const [calculating, setCalculating] = useState(false);
+  const [calculating, setCalculating] = useState<null | "salary" | "benefits">(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const { data: drivers = [] } = useQuery<Driver[]>({
@@ -47,14 +47,15 @@ export default function FolhaPage() {
   const driverPayroll = payroll.filter((p) => p.person_type === "driver");
   const employeePayroll = payroll.filter((p) => p.person_type === "employee");
 
+  type IncludeField = "included_salary" | "included_benefits";
   const includeMutation = useMutation({
-    mutationFn: ({ id, included }: { id: string; included: boolean }) =>
-      api.patch(`/api/payroll/${id}`, { included }),
-    onMutate: async ({ id, included }) => {
+    mutationFn: ({ id, field, value }: { id: string; field: IncludeField; value: boolean }) =>
+      api.patch(`/api/payroll/${id}`, { [field]: value }),
+    onMutate: async ({ id, field, value }) => {
       await queryClient.cancelQueries({ queryKey: ["payroll", month] });
       const previous = queryClient.getQueryData<PayrollRecord[]>(["payroll", month]);
       queryClient.setQueryData<PayrollRecord[]>(["payroll", month], (old) =>
-        (old || []).map((p) => (p.id === id ? { ...p, included } : p))
+        (old || []).map((p) => (p.id === id ? { ...p, [field]: value } : p))
       );
       return { previous };
     },
@@ -67,8 +68,8 @@ export default function FolhaPage() {
     },
   });
 
-  const calculateAll = async () => {
-    setCalculating(true);
+  const calculateScope = async (scope: "salary" | "benefits") => {
+    setCalculating(scope);
     try {
       const allPeople = [
         ...drivers.map((d) => ({ type: "driver" as const, id: d.id })),
@@ -80,15 +81,20 @@ export default function FolhaPage() {
           person_type: person.type,
           person_id: person.id,
           month,
+          scope,
         });
       }
 
       queryClient.invalidateQueries({ queryKey: ["payroll", month] });
-      toast.success("Folha de pagamento calculada.");
+      toast.success(
+        scope === "salary"
+          ? "Folha de salários calculada."
+          : "Folha de benefícios calculada."
+      );
     } catch {
       toast.error("Erro ao calcular folha.");
     }
-    setCalculating(false);
+    setCalculating(null);
   };
 
   const exportExcel = (type: "salary" | "benefits") => {
@@ -119,7 +125,7 @@ export default function FolhaPage() {
 
     const totals = records.reduce(
       (acc, r) => {
-        if (!r.included) return acc;
+        if (!r.included_salary) return acc;
         const advTotals = r.breakdown?.advance_totals || {};
         const salaryAdv = Number(advTotals.salario || 0) + Number(advTotals.produtos || 0);
         return {
@@ -157,7 +163,7 @@ export default function FolhaPage() {
             const gross = Number(record.gross_pay);
             const netSalary = gross - inss - salaryAdv;
             const pixKey = breakdown?.pix_key || record.pix_key || "";
-            const excluded = !record.included;
+            const excluded = !record.included_salary;
 
             return (
               <>
@@ -179,11 +185,12 @@ export default function FolhaPage() {
                     <input
                       type="checkbox"
                       className="h-4 w-4 cursor-pointer accent-emerald-600"
-                      checked={record.included}
+                      checked={record.included_salary}
                       onChange={(e) =>
                         includeMutation.mutate({
                           id: record.id,
-                          included: e.target.checked,
+                          field: "included_salary",
+                          value: e.target.checked,
                         })
                       }
                     />
@@ -306,7 +313,7 @@ export default function FolhaPage() {
 
     const totals = records.reduce(
       (acc, r) => {
-        if (!r.included) return acc;
+        if (!r.included_benefits) return acc;
         const b = r.breakdown?.benefit;
         const alim = b?.alimentacao_valor ?? Number(r.beneficio_alimentacao || 0);
         const trans = b?.transporte_valor ?? Number(r.beneficio_transporte || 0);
@@ -357,7 +364,7 @@ export default function FolhaPage() {
             const dedRef = b?.refeicao_deducao ?? 0;
             const gross = alim + trans + ref;
             const net = gross - dedAlim - dedTrans - dedRef;
-            const excluded = !record.included;
+            const excluded = !record.included_benefits;
 
             return (
               <TableRow key={record.id} className={excluded ? "opacity-50" : ""}>
@@ -365,11 +372,12 @@ export default function FolhaPage() {
                   <input
                     type="checkbox"
                     className="h-4 w-4 cursor-pointer accent-emerald-600"
-                    checked={record.included}
+                    checked={record.included_benefits}
                     onChange={(e) =>
                       includeMutation.mutate({
                         id: record.id,
-                        included: e.target.checked,
+                        field: "included_benefits",
+                        value: e.target.checked,
                       })
                     }
                   />
@@ -444,16 +452,28 @@ export default function FolhaPage() {
             />
           </div>
           <Button
-            onClick={calculateAll}
-            disabled={calculating}
+            onClick={() => calculateScope("salary")}
+            disabled={calculating !== null}
             className="gap-2"
           >
-            {calculating ? (
+            {calculating === "salary" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Calculator className="h-4 w-4" />
             )}
-            {calculating ? "Calculando..." : "Calcular Folha"}
+            {calculating === "salary" ? "Calculando..." : "Calcular Salários"}
+          </Button>
+          <Button
+            onClick={() => calculateScope("benefits")}
+            disabled={calculating !== null}
+            className="gap-2"
+          >
+            {calculating === "benefits" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Calculator className="h-4 w-4" />
+            )}
+            {calculating === "benefits" ? "Calculando..." : "Calcular Benefícios"}
           </Button>
           <Button
             variant="outline"

@@ -165,7 +165,8 @@ class AdvanceCreate(BaseModel):
 
 
 class PayrollUpdate(BaseModel):
-    included: bool
+    included_salary: bool | None = None
+    included_benefits: bool | None = None
 
 
 # --- Payroll ---
@@ -173,3 +174,4 @@ class PayrollCalculateRequest(BaseModel):
     person_type: PersonType
     person_id: str
     month: str  # YYYY-MM
+    scope: str = "all"  # 'salary', 'benefits', or 'all'

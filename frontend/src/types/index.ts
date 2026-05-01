@@ -127,7 +127,8 @@ export interface PayrollRecord {
   total_deductions: number;
   total_advances: number;
   net_pay: number;
-  included: boolean;
+  included_salary: boolean;
+  included_benefits: boolean;
   person_name_snapshot?: string | null;
   person_cpf_snapshot?: string | null;
   breakdown: {
