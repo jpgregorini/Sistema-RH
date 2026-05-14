@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -166,9 +166,8 @@ export default function FolhaPage() {
             const excluded = !record.included_salary;
 
             return (
-              <>
+              <Fragment key={record.id}>
                 <TableRow
-                  key={record.id}
                   className={`hover:bg-slate-50 ${excluded ? "opacity-50" : ""}`}
                 >
                   <TableCell
@@ -277,7 +276,7 @@ export default function FolhaPage() {
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </Fragment>
             );
           })}
 
