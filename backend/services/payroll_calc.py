@@ -1,6 +1,8 @@
 from database import get_supabase
 
 
+MINIMUM_WAGE = 1621.00
+
 # INSS 2024 progressive brackets
 INSS_BRACKETS = [
     (1621.00, 0.075),
@@ -8,6 +10,18 @@ INSS_BRACKETS = [
     (4354.27, 0.12),
     (8475.55, 0.14),
 ]
+
+
+def calculate_insalubridade(pct: int) -> float:
+    if pct not in (10, 20, 40):
+        return 0.0
+    return round(MINIMUM_WAGE * pct / 100, 2)
+
+
+def calculate_periculosidade(base_salary: float, enabled: bool) -> float:
+    if not enabled or base_salary <= 0:
+        return 0.0
+    return round(base_salary * 0.30, 2)
 
 
 def calculate_inss(gross: float) -> float:
@@ -39,7 +53,7 @@ def _get_person_full(db, person_type: str, person_id: str) -> dict:
     table = "drivers" if person_type == "driver" else "employees"
     result = (
         db.table(table)
-        .select("name, cpf, pix_key, base_salary, beneficio_alimentacao, beneficio_transporte, beneficio_refeicao")
+        .select("name, cpf, pix_key, base_salary, beneficio_alimentacao, beneficio_transporte, beneficio_refeicao, insalubridade_pct, periculosidade")
         .eq("id", person_id)
         .single()
         .execute()
@@ -176,7 +190,11 @@ def _calculate_driver_payroll(db, driver_id: str, month: str) -> dict:
 
     # Optional monthly base salary (commission + salary, or commission only if null)
     base_salary = float(person.get("base_salary") or 0)
-    gross_pay = total_commission + base_salary
+    insalubridade_pct = int(person.get("insalubridade_pct") or 0)
+    periculosidade_on = bool(person.get("periculosidade") or False)
+    insalubridade_valor = calculate_insalubridade(insalubridade_pct)
+    periculosidade_valor = calculate_periculosidade(base_salary, periculosidade_on)
+    gross_pay = total_commission + base_salary + insalubridade_valor + periculosidade_valor
 
     # INSS
     inss = calculate_inss(gross_pay)
@@ -202,6 +220,10 @@ def _calculate_driver_payroll(db, driver_id: str, month: str) -> dict:
         "breakdown": {
             "base_salary": round(base_salary, 2),
             "total_commission": round(total_commission, 2),
+            "insalubridade_pct": insalubridade_pct,
+            "insalubridade_valor": insalubridade_valor,
+            "periculosidade": periculosidade_on,
+            "periculosidade_valor": periculosidade_valor,
             "company_earnings": company_earnings,
             "trips": trip_details,
             "advances": adv["advances_by_type"],
@@ -215,15 +237,12 @@ def _calculate_driver_payroll(db, driver_id: str, month: str) -> dict:
 def _calculate_employee_payroll(db, employee_id: str, month: str) -> dict:
     person = _get_person_full(db, "employee", employee_id)
 
-    # Get employee base salary
-    emp_result = (
-        db.table("employees")
-        .select("base_salary")
-        .eq("id", employee_id)
-        .single()
-        .execute()
-    )
-    gross_pay = float(emp_result.data["base_salary"] or 0)
+    base_salary = float(person.get("base_salary") or 0)
+    insalubridade_pct = int(person.get("insalubridade_pct") or 0)
+    periculosidade_on = bool(person.get("periculosidade") or False)
+    insalubridade_valor = calculate_insalubridade(insalubridade_pct)
+    periculosidade_valor = calculate_periculosidade(base_salary, periculosidade_on)
+    gross_pay = base_salary + insalubridade_valor + periculosidade_valor
 
     # INSS
     inss = calculate_inss(gross_pay)
@@ -247,6 +266,11 @@ def _calculate_employee_payroll(db, employee_id: str, month: str) -> dict:
         "total_advances": adv["total_advances"],
         "net_pay": net_pay,
         "breakdown": {
+            "base_salary": round(base_salary, 2),
+            "insalubridade_pct": insalubridade_pct,
+            "insalubridade_valor": insalubridade_valor,
+            "periculosidade": periculosidade_on,
+            "periculosidade_valor": periculosidade_valor,
             "advances": adv["advances_by_type"],
             "advance_totals": adv["totals_by_type"],
             "benefit": benefit,

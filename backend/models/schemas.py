@@ -55,6 +55,8 @@ class DriverCreate(BaseModel):
     beneficio_alimentacao: float = 0
     beneficio_transporte: float = 0
     beneficio_refeicao: float = 0
+    insalubridade_pct: int = 0
+    periculosidade: bool = False
 
 
 class DriverUpdate(BaseModel):
@@ -75,6 +77,8 @@ class DriverUpdate(BaseModel):
     beneficio_alimentacao: float | None = None
     beneficio_transporte: float | None = None
     beneficio_refeicao: float | None = None
+    insalubridade_pct: int | None = None
+    periculosidade: bool | None = None
 
 
 # --- Employee ---
@@ -93,6 +97,8 @@ class EmployeeCreate(BaseModel):
     beneficio_alimentacao: float = 0
     beneficio_transporte: float = 0
     beneficio_refeicao: float = 0
+    insalubridade_pct: int = 0
+    periculosidade: bool = False
 
 
 class EmployeeUpdate(BaseModel):
@@ -111,6 +117,8 @@ class EmployeeUpdate(BaseModel):
     beneficio_alimentacao: float | None = None
     beneficio_transporte: float | None = None
     beneficio_refeicao: float | None = None
+    insalubridade_pct: int | None = None
+    periculosidade: bool | None = None
 
 
 # --- Trip ---
