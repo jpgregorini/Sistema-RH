@@ -5,3 +5,4 @@
 
 alter table drivers
     add column base_salary numeric(10,2);
+
