@@ -49,6 +49,10 @@ export function EmployeeForm({ employee }: EmployeeFormProps) {
   const [benefAlimentacao, setBenefAlimentacao] = useState(employee?.beneficio_alimentacao ? String(employee.beneficio_alimentacao) : "");
   const [benefTransporte, setBenefTransporte] = useState(employee?.beneficio_transporte ? String(employee.beneficio_transporte) : "");
   const [benefRefeicao, setBenefRefeicao] = useState(employee?.beneficio_refeicao ? String(employee.beneficio_refeicao) : "");
+  const [insalubridadePct, setInsalubridadePct] = useState<string>(
+    employee?.insalubridade_pct ? String(employee.insalubridade_pct) : "0"
+  );
+  const [periculosidade, setPericulosidade] = useState<boolean>(employee?.periculosidade || false);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -67,6 +71,8 @@ export function EmployeeForm({ employee }: EmployeeFormProps) {
         beneficio_alimentacao: Number(benefAlimentacao) || 0,
         beneficio_transporte: Number(benefTransporte) || 0,
         beneficio_refeicao: Number(benefRefeicao) || 0,
+        insalubridade_pct: Number(insalubridadePct) || 0,
+        periculosidade,
       };
 
       if (isEditing) {
@@ -223,6 +229,48 @@ export function EmployeeForm({ employee }: EmployeeFormProps) {
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
               />
+            </div>
+
+            <div className="sm:col-span-2">
+              <div className="mb-2 mt-2 border-t pt-4">
+                <p className="text-sm font-semibold text-slate-700">Adicionais</p>
+                <p className="text-xs text-slate-500 mb-3">
+                  Insalubridade calculada sobre o salário mínimo (R$ 1.621,00). Periculosidade = 30% do salário base.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="insalubridade">Insalubridade</Label>
+                  <Select
+                    value={insalubridadePct}
+                    onValueChange={(v) => v && setInsalubridadePct(v)}
+                  >
+                    <SelectTrigger>
+                      <span className="flex flex-1 text-left">
+                        {insalubridadePct === "0" ? "Sem insalubridade" : `${insalubridadePct}%`}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sem insalubridade</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                      <SelectItem value="20">20%</SelectItem>
+                      <SelectItem value="40">40%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Periculosidade</Label>
+                  <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={periculosidade}
+                      onChange={(e) => setPericulosidade(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-sm">Recebe periculosidade (30% do salário base)</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="sm:col-span-2">

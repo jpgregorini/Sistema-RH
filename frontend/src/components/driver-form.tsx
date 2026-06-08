@@ -12,6 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 import { Upload, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Driver, CompanyName } from "@/types";
@@ -62,6 +68,10 @@ export function DriverForm({ driver }: DriverFormProps) {
   const [benefAlimentacao, setBenefAlimentacao] = useState(driver?.beneficio_alimentacao ? String(driver.beneficio_alimentacao) : "");
   const [benefTransporte, setBenefTransporte] = useState(driver?.beneficio_transporte ? String(driver.beneficio_transporte) : "");
   const [benefRefeicao, setBenefRefeicao] = useState(driver?.beneficio_refeicao ? String(driver.beneficio_refeicao) : "");
+  const [insalubridadePct, setInsalubridadePct] = useState<string>(
+    driver?.insalubridade_pct ? String(driver.insalubridade_pct) : "0"
+  );
+  const [periculosidade, setPericulosidade] = useState<boolean>(driver?.periculosidade || false);
 
   const [aiLoading, setAiLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -92,6 +102,8 @@ export function DriverForm({ driver }: DriverFormProps) {
         beneficio_alimentacao: Number(benefAlimentacao) || 0,
         beneficio_transporte: Number(benefTransporte) || 0,
         beneficio_refeicao: Number(benefRefeicao) || 0,
+        insalubridade_pct: Number(insalubridadePct) || 0,
+        periculosidade,
       };
 
       if (isEditing) {
@@ -310,6 +322,40 @@ export function DriverForm({ driver }: DriverFormProps) {
                   <p className="text-xs text-slate-500">
                     Deixe em branco para motoristas que recebem somente por comissão.
                   </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="insalubridade">Insalubridade</Label>
+                  <Select
+                    value={insalubridadePct}
+                    onValueChange={(v) => v && setInsalubridadePct(v)}
+                  >
+                    <SelectTrigger>
+                      <span className="flex flex-1 text-left">
+                        {insalubridadePct === "0" ? "Sem insalubridade" : `${insalubridadePct}%`}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sem insalubridade</SelectItem>
+                      <SelectItem value="10">10%</SelectItem>
+                      <SelectItem value="20">20%</SelectItem>
+                      <SelectItem value="40">40%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">
+                    % aplicada sobre o salário mínimo (R$ 1.621,00).
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Periculosidade</Label>
+                  <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={periculosidade}
+                      onChange={(e) => setPericulosidade(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-sm">Recebe periculosidade (30% do salário base)</span>
+                  </label>
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="notes">Observações</Label>

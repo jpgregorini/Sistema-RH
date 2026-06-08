@@ -29,6 +29,8 @@ export interface Driver {
   beneficio_alimentacao: number;
   beneficio_transporte: number;
   beneficio_refeicao: number;
+  insalubridade_pct: number;
+  periculosidade: boolean;
   created_at: string;
   updated_at: string;
   driver_company_commissions: CommissionRate[];
@@ -51,6 +53,8 @@ export interface Employee {
   beneficio_alimentacao: number;
   beneficio_transporte: number;
   beneficio_refeicao: number;
+  insalubridade_pct: number;
+  periculosidade: boolean;
   created_at: string;
   updated_at: string;
 }
