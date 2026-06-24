@@ -2,7 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from routers import drivers, employees, trips, products, advances, payroll, ai
+from routers import (
+    drivers,
+    employees,
+    trips,
+    products,
+    advances,
+    payroll,
+    ai,
+    product_deductions,
+    time_records,
+)
 
 app = FastAPI(title="Novalog HR API")
 
@@ -20,6 +30,12 @@ app.include_router(trips.router, prefix="/api/trips", tags=["Viagens"])
 app.include_router(products.router, prefix="/api/products", tags=["Produtos"])
 app.include_router(advances.router, prefix="/api/advances", tags=["Adiantamentos"])
 app.include_router(payroll.router, prefix="/api/payroll", tags=["Folha"])
+app.include_router(
+    product_deductions.router,
+    prefix="/api/product-deductions",
+    tags=["Saída de Produto"],
+)
+app.include_router(time_records.router, prefix="/api/time-records", tags=["Horários"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 
 

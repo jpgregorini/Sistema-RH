@@ -62,7 +62,15 @@ def _get_person_full(db, person_type: str, person_id: str) -> dict:
 
 
 def _get_advances_breakdown(db, person_type: str, person_id: str, month: str) -> dict:
-    """Get all advances for a person in a month, grouped by type."""
+    """Aggregate salary deductions for a person in a month.
+
+    Sources:
+      - salary_advances: legacy rows may have advance_type='beneficio' or
+        'produtos'; new rows are always 'salario'. Benefit-typed rows are
+        tracked for the benefit breakdown but do NOT deduct from pay anymore
+        in the new model (kept for historical reporting only).
+      - product_deductions: each row deducts quantity*unit_price from pay.
+    """
     advances_result = (
         db.table("salary_advances")
         .select("*")
@@ -74,7 +82,6 @@ def _get_advances_breakdown(db, person_type: str, person_id: str, month: str) ->
 
     by_type = {"beneficio": [], "salario": [], "produtos": []}
     totals = {"beneficio": 0, "salario": 0, "produtos": 0}
-    # Track benefit deductions by category
     benefit_deductions = {"alimentacao": 0, "transporte": 0, "refeicao": 0}
 
     for a in advances_result.data:
@@ -94,15 +101,45 @@ def _get_advances_breakdown(db, person_type: str, person_id: str, month: str) ->
         by_type.setdefault(adv_type, []).append(entry)
         totals[adv_type] = totals.get(adv_type, 0) + float(a["amount"])
 
-    total_advances = sum(totals.values())
-    # Only salary and product advances are deducted from pay.
-    # Benefit advances are deducted from the benefit card, not from salary.
-    total_from_pay = totals["salario"] + totals["produtos"]
+    # Product deductions (new model: registered in /produtos, not in advances)
+    pd_result = (
+        db.table("product_deductions")
+        .select("id, quantity, unit_price, deduction_date, product_name_snapshot, products(name)")
+        .eq("person_type", person_type)
+        .eq("person_id", person_id)
+        .eq("payroll_month", month)
+        .execute()
+    )
+    product_deductions: list[dict] = []
+    product_deductions_total = 0.0
+    for pd in pd_result.data or []:
+        qty = int(pd.get("quantity") or 1)
+        unit = float(pd.get("unit_price") or 0)
+        line_total = round(qty * unit, 2)
+        product_deductions_total += line_total
+        prod_name = pd.get("product_name_snapshot") or (
+            (pd.get("products") or {}).get("name") if isinstance(pd.get("products"), dict) else None
+        )
+        product_deductions.append({
+            "id": pd["id"],
+            "product_name": prod_name,
+            "quantity": qty,
+            "unit_price": unit,
+            "amount": line_total,
+            "date": pd.get("deduction_date"),
+        })
+
+    total_advances = sum(totals.values()) + product_deductions_total
+    # Salary deductions: legacy salario + legacy produtos + new product_deductions.
+    # Benefit-typed legacy rows still don't deduct from salary.
+    total_from_pay = totals["salario"] + totals["produtos"] + product_deductions_total
 
     return {
         "advances_by_type": by_type,
         "totals_by_type": totals,
         "benefit_deductions": {k: round(v, 2) for k, v in benefit_deductions.items()},
+        "product_deductions": product_deductions,
+        "product_deductions_total": round(product_deductions_total, 2),
         "total_advances": round(total_advances, 2),
         "total_deducted_from_pay": round(total_from_pay, 2),
     }
@@ -228,6 +265,8 @@ def _calculate_driver_payroll(db, driver_id: str, month: str) -> dict:
             "trips": trip_details,
             "advances": adv["advances_by_type"],
             "advance_totals": adv["totals_by_type"],
+            "product_deductions": adv["product_deductions"],
+            "product_deductions_total": adv["product_deductions_total"],
             "benefit": benefit,
             "pix_key": person.get("pix_key"),
         },
@@ -273,6 +312,8 @@ def _calculate_employee_payroll(db, employee_id: str, month: str) -> dict:
             "periculosidade_valor": periculosidade_valor,
             "advances": adv["advances_by_type"],
             "advance_totals": adv["totals_by_type"],
+            "product_deductions": adv["product_deductions"],
+            "product_deductions_total": adv["product_deductions_total"],
             "benefit": benefit,
             "pix_key": person.get("pix_key"),
         },

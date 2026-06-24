@@ -159,13 +159,12 @@ class ProductUpdate(BaseModel):
 
 
 # --- Advance ---
+# New advances are always salary deductions. The advance_type field is kept
+# only for legacy compatibility (so old beneficio/produtos rows still load).
 class AdvanceCreate(BaseModel):
     person_type: PersonType
     person_id: str
-    advance_type: AdvanceType
     amount: float
-    beneficio_category: BeneficioCategory | None = None
-    product_name: str | None = None
     advance_date: date | None = None
     payroll_month: str | None = None
     notes: str | None = None
@@ -183,3 +182,34 @@ class PayrollCalculateRequest(BaseModel):
     person_id: str
     month: str  # YYYY-MM
     scope: str = "all"  # 'salary', 'benefits', or 'all'
+
+
+# --- Product Deductions (saída de produto) ---
+class ProductDeductionCreate(BaseModel):
+    person_type: PersonType
+    person_id: str
+    product_id: str
+    quantity: int = 1
+    deduction_date: date | None = None
+    payroll_month: str | None = None
+    notes: str | None = None
+
+
+# --- Time Records (horários) ---
+class TimeRecordTarget(str, Enum):
+    all_drivers = "all_drivers"
+    all_employees = "all_employees"
+    all = "all"
+    custom = "custom"
+
+
+class TimeRecordPerson(BaseModel):
+    person_type: PersonType
+    person_id: str
+
+
+class TimeRecordCreate(BaseModel):
+    punch_at: str  # ISO datetime
+    target: TimeRecordTarget
+    people: list[TimeRecordPerson] = []
+    notes: str | None = None

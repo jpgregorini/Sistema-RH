@@ -14,7 +14,7 @@ def _get_person(db, person_type: str, person_id: str):
     table = "drivers" if person_type == "driver" else "employees"
     result = (
         db.table(table)
-        .select("name, cpf, payday, base_salary, beneficio_alimentacao, beneficio_transporte, beneficio_refeicao")
+        .select("name, cpf, payday, base_salary")
         .eq("id", person_id)
         .single()
         .execute()
@@ -22,21 +22,20 @@ def _get_person(db, person_type: str, person_id: str):
     return result.data
 
 
-def _get_month_advances(db, person_type: str, person_id: str, payroll_month: str):
-    """Get all advances for a person in a given month."""
+def _get_month_salary_advances(db, person_type: str, person_id: str, payroll_month: str):
     result = (
         db.table("salary_advances")
         .select("*")
         .eq("person_type", person_type)
         .eq("person_id", person_id)
         .eq("payroll_month", payroll_month)
+        .eq("advance_type", "salario")
         .execute()
     )
     return result.data
 
 
 def _add_months(month: str, n: int) -> str:
-    """Return YYYY-MM advanced by `n` months."""
     y, m = month.split("-")
     y_i, m_i = int(y), int(m)
     total = (y_i * 12 + (m_i - 1)) + n
@@ -45,20 +44,12 @@ def _add_months(month: str, n: int) -> str:
 
 
 def _split_amount(total: float, n: int) -> list[float]:
-    """Split `total` into `n` parts, with cents rounded; remainder lands on last."""
     if n <= 1:
         return [round(total, 2)]
     base = round(total / n, 2)
     parts = [base] * (n - 1)
     parts.append(round(total - base * (n - 1), 2))
     return parts
-
-
-BENEFICIO_COLUMN_MAP = {
-    "alimentacao": "beneficio_alimentacao",
-    "transporte": "beneficio_transporte",
-    "refeicao": "beneficio_refeicao",
-}
 
 
 @router.get("")
@@ -98,71 +89,28 @@ def create_advance(data: AdvanceCreate):
         for i in range(n_installments)
     ]
 
-    # --- Validation per advance type ---
-    if data.advance_type.value == "beneficio":
-        if not data.beneficio_category:
-            raise HTTPException(
-                status_code=400,
-                detail="beneficio_category é obrigatório para adiantamento do tipo benefício.",
-            )
-        category = data.beneficio_category.value
-        column = BENEFICIO_COLUMN_MAP[category]
-        limit = float(person.get(column) or 0)
-
-        # Validate each installment month independently against the monthly benefit limit
+    # --- Validate salary balance per installment month ---
+    base_salary = float(person.get("base_salary") or 0)
+    if data.person_type.value == "employee" and base_salary <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Funcionário não possui salário base cadastrado.",
+        )
+    if base_salary > 0:
         for inst in schedule:
-            month_advances = _get_month_advances(
+            month_advances = _get_month_salary_advances(
                 db, data.person_type.value, data.person_id, inst["payroll_month"]
             )
-            used = sum(
-                float(a["amount"])
-                for a in month_advances
-                if a["advance_type"] == "beneficio" and a.get("beneficio_category") == category
-            )
-            available = limit - used
+            used = sum(float(a["amount"]) for a in month_advances)
+            available = base_salary - used
             if inst["amount"] > available:
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        f"Saldo insuficiente em {category} para {inst['payroll_month']}. "
-                        f"Disponível: R$ {available:.2f}"
+                        f"Valor excede o saldo disponível do salário em "
+                        f"{inst['payroll_month']}. Disponível: R$ {available:.2f}"
                     ),
                 )
-
-    elif data.advance_type.value == "salario":
-        base_salary = float(person.get("base_salary") or 0)
-        if data.person_type.value == "employee":
-            if base_salary <= 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Funcionário não possui salário base cadastrado.",
-                )
-        if base_salary > 0:
-            for inst in schedule:
-                month_advances = _get_month_advances(
-                    db, data.person_type.value, data.person_id, inst["payroll_month"]
-                )
-                used = sum(
-                    float(a["amount"])
-                    for a in month_advances
-                    if a["advance_type"] == "salario"
-                )
-                available = base_salary - used
-                if inst["amount"] > available:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            f"Valor excede o saldo disponível do salário em "
-                            f"{inst['payroll_month']}. Disponível: R$ {available:.2f}"
-                        ),
-                    )
-
-    elif data.advance_type.value == "produtos":
-        if not data.product_name or not data.product_name.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Nome do produto é obrigatório para adiantamento do tipo produtos.",
-            )
 
     # --- Generate PDF (single contract for the whole amount) ---
     pdf_bytes = generate_advance_pdf(
@@ -187,14 +135,13 @@ def create_advance(data: AdvanceCreate):
     )
     pdf_url = db.storage.from_("contracts").get_public_url(filename)
 
-    # --- Insert one row per installment, sharing group id and contract URL ---
     group_id = str(uuid4()) if n_installments > 1 else None
     rows = []
     for inst in schedule:
         row = {
             "person_type": data.person_type.value,
             "person_id": data.person_id,
-            "advance_type": data.advance_type.value,
+            "advance_type": "salario",
             "amount": inst["amount"],
             "advance_date": advance_date.isoformat(),
             "contract_pdf_url": pdf_url,
@@ -203,10 +150,6 @@ def create_advance(data: AdvanceCreate):
             "person_name_snapshot": person.get("name"),
             "person_cpf_snapshot": person.get("cpf"),
         }
-        if data.beneficio_category:
-            row["beneficio_category"] = data.beneficio_category.value
-        if data.product_name:
-            row["product_name"] = data.product_name
         if group_id:
             row["installment_group_id"] = group_id
             row["installment_index"] = inst["index"]
@@ -244,7 +187,6 @@ def download_advance_pdf(advance_id: str):
 
     from datetime import date
 
-    # If part of an installment group, rebuild the schedule for the PDF
     schedule = None
     total_amount = float(adv["amount"])
     if adv.get("installment_group_id"):

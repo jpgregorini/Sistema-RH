@@ -89,6 +89,49 @@ export interface Product {
   created_at: string;
 }
 
+export interface ProductDeduction {
+  id: string;
+  person_type: PersonType;
+  person_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  deduction_date: string;
+  payroll_month: string;
+  notes: string | null;
+  person_name_snapshot?: string | null;
+  person_cpf_snapshot?: string | null;
+  product_name_snapshot?: string | null;
+  products?: { name: string; price: number } | null;
+  created_at: string;
+}
+
+export interface TimeRecord {
+  id: string;
+  batch_id: string;
+  person_type: PersonType;
+  person_id: string;
+  person_name_snapshot: string;
+  person_cpf_snapshot: string | null;
+  punch_at: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface TimeRecordBatch {
+  batch_id: string;
+  punch_at: string;
+  count: number;
+  notes: string | null;
+  people: {
+    id: string;
+    person_type: PersonType;
+    person_id: string;
+    name: string;
+    cpf: string | null;
+  }[];
+}
+
 export interface SalaryAdvance {
   id: string;
   person_type: PersonType;

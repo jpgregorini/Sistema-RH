@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   LogOut,
   Loader2,
+  Clock,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase-browser";
 import { useRouter } from "next/navigation";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/viagens", label: "Viagens", icon: Map },
   { href: "/produtos", label: "Produtos", icon: Package },
   { href: "/adiantamentos", label: "Adiantamentos", icon: HandCoins },
+  { href: "/horarios", label: "Horários", icon: Clock },
   { href: "/folha", label: "Folha de Pagamento", icon: Calculator },
 ];
 

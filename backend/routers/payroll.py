@@ -4,6 +4,8 @@ from database import get_supabase
 from models.schemas import PayrollCalculateRequest, PayrollUpdate
 from services.payroll_calc import calculate_payroll
 from services.excel_export import generate_payroll_excel
+from services.pdf_generator import generate_benefit_receipt_pdf
+from datetime import date as date_type
 import io
 
 router = APIRouter()
@@ -197,6 +199,57 @@ def list_payroll(month: str | None = None):
         query = query.eq("month", month)
     result = query.order("person_type").execute()
     return _enrich(db, result.data)
+
+
+BENEFIT_CATEGORIES = {"alimentacao", "transporte", "refeicao"}
+
+
+@router.get("/{payroll_id}/benefit-receipt")
+def benefit_receipt(payroll_id: str, category: str):
+    """Generate a PDF receipt for a single benefit category of a payroll row."""
+    if category not in BENEFIT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Categoria inválida.")
+
+    db = get_supabase()
+    row = (
+        db.table("payroll")
+        .select("*")
+        .eq("id", payroll_id)
+        .single()
+        .execute()
+    ).data
+    if not row:
+        raise HTTPException(status_code=404, detail="Folha não encontrada.")
+
+    enriched = _enrich(db, [row])[0]
+    breakdown = enriched.get("breakdown") or {}
+    benefit = breakdown.get("benefit") or {}
+    value = float(benefit.get(f"{category}_valor") or enriched.get(f"beneficio_{category}") or 0)
+    if value <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Colaborador não possui valor de {category} cadastrado.",
+        )
+
+    pdf_bytes = generate_benefit_receipt_pdf(
+        name=enriched.get("person_name") or "—",
+        cpf=enriched.get("person_cpf") or "—",
+        pix_key=enriched.get("pix_key"),
+        category=category,
+        amount=value,
+        payment_date=date_type.today(),
+        payroll_month=enriched["month"],
+    )
+    fname_cpf = (enriched.get("person_cpf") or "").replace(".", "").replace("-", "") or payroll_id
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f"inline; filename=comprovante_{category}_{fname_cpf}_{enriched['month']}.pdf"
+            )
+        },
+    )
 
 
 @router.get("/export")

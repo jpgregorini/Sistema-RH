@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Calculator, Download, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Calculator, Download, Loader2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { formatBRL } from "@/lib/format";
 import { toast } from "sonner";
 import type { Driver, Employee, PayrollRecord } from "@/types";
@@ -97,10 +97,21 @@ export default function FolhaPage() {
     setCalculating(null);
   };
 
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const exportExcel = (type: "salary" | "benefits") => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     window.open(
       `${apiUrl}/api/payroll/export?month=${month}&type=${type}`,
+      "_blank"
+    );
+  };
+
+  const downloadBenefitReceipt = (
+    payrollId: string,
+    category: "alimentacao" | "transporte" | "refeicao"
+  ) => {
+    window.open(
+      `${apiUrl}/api/payroll/${payrollId}/benefit-receipt?category=${category}`,
       "_blank"
     );
   };
@@ -351,6 +362,7 @@ export default function FolhaPage() {
             <TableHead className="text-right">Refeição</TableHead>
             <TableHead className="text-right text-red-600">Ded. Ref.</TableHead>
             <TableHead className="text-right">Benefício Líquido</TableHead>
+            <TableHead>Comprovantes</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -401,6 +413,43 @@ export default function FolhaPage() {
                 <TableCell className="text-right font-bold text-emerald-700">
                   {formatBRL(net)}
                 </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-blue-600"
+                      disabled={alim <= 0}
+                      onClick={() => downloadBenefitReceipt(record.id, "alimentacao")}
+                      title="Comprovante de Alimentação"
+                    >
+                      <FileText className="h-3 w-3" />
+                      Alim.
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-blue-600"
+                      disabled={trans <= 0}
+                      onClick={() => downloadBenefitReceipt(record.id, "transporte")}
+                      title="Comprovante de Transporte"
+                    >
+                      <FileText className="h-3 w-3" />
+                      Transp.
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-blue-600"
+                      disabled={ref <= 0}
+                      onClick={() => downloadBenefitReceipt(record.id, "refeicao")}
+                      title="Comprovante de Refeição"
+                    >
+                      <FileText className="h-3 w-3" />
+                      Refeição
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             );
           })}
@@ -424,6 +473,7 @@ export default function FolhaPage() {
             <TableCell className="text-right text-emerald-700">
               {formatBRL(totals.net)}
             </TableCell>
+            <TableCell></TableCell>
           </TableRow>
         </TableBody>
       </Table>

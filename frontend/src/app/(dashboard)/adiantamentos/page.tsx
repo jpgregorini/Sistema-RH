@@ -37,9 +37,9 @@ import type {
   BeneficioCategory,
 } from "@/types";
 
-const ADVANCE_TYPE_LABELS: Record<AdvanceType, string> = {
-  beneficio: "Benefício",
+const LEGACY_TYPE_LABELS: Record<AdvanceType, string> = {
   salario: "Salário",
+  beneficio: "Benefício",
   produtos: "Produtos",
 };
 
@@ -58,9 +58,6 @@ export default function AdiantamentosPage() {
 
   const [personType, setPersonType] = useState<PersonType>("driver");
   const [personId, setPersonId] = useState("");
-  const [advanceType, setAdvanceType] = useState<AdvanceType>("salario");
-  const [beneficioCategory, setBeneficioCategory] = useState<BeneficioCategory>("alimentacao");
-  const [productName, setProductName] = useState("");
   const [amount, setAmount] = useState("");
   const [advanceDate, setAdvanceDate] = useState(
     new Date().toISOString().slice(0, 10)
@@ -84,37 +81,24 @@ export default function AdiantamentosPage() {
     queryFn: () => api.get(`/api/advances?month=${month}`),
   });
 
-  // Fetch advances of the selected person in the selected payrollMonth
-  // — used to compute the remaining benefit balance (#2 fix).
   const { data: personMonthAdvances = [] } = useQuery<SalaryAdvance[]>({
     queryKey: ["advances-person-month", personType, personId, payrollMonth],
     queryFn: () =>
       api.get(
-        `/api/advances?person_type=${personType}&person_id=${personId}&month=${payrollMonth}`
+        `/api/advances?person_type=${personType}&person_id=${personId}&month=${payrollMonth}&advance_type=salario`
       ),
     enabled: Boolean(personId && payrollMonth),
   });
 
   const people = personType === "driver" ? drivers : employees;
   const selectedPerson = people.find((p) => p.id === personId);
+  const baseSalary = Number(selectedPerson?.base_salary || 0);
 
-  const benefitLimit = selectedPerson
-    ? beneficioCategory === "alimentacao"
-      ? selectedPerson.beneficio_alimentacao
-      : beneficioCategory === "transporte"
-      ? selectedPerson.beneficio_transporte
-      : selectedPerson.beneficio_refeicao
-    : 0;
-
-  const benefitUsed = personMonthAdvances
-    .filter(
-      (a) =>
-        a.advance_type === "beneficio" &&
-        a.beneficio_category === beneficioCategory
-    )
-    .reduce((sum, a) => sum + Number(a.amount), 0);
-
-  const benefitRemaining = Math.max(0, Number(benefitLimit) - benefitUsed);
+  const salaryUsed = personMonthAdvances.reduce(
+    (sum, a) => sum + Number(a.amount),
+    0
+  );
+  const salaryRemaining = Math.max(0, baseSalary - salaryUsed);
 
   const installmentBreakdown = useMemo(() => {
     const total = Number(amount) || 0;
@@ -125,25 +109,16 @@ export default function AdiantamentosPage() {
   }, [amount, installments]);
 
   const createMutation = useMutation({
-    mutationFn: () => {
-      const body: Record<string, unknown> = {
+    mutationFn: () =>
+      api.post("/api/advances", {
         person_type: personType,
         person_id: personId,
-        advance_type: advanceType,
         amount: Number(amount),
         advance_date: advanceDate,
         payroll_month: payrollMonth,
         installments,
         notes: notes || null,
-      };
-      if (advanceType === "beneficio") {
-        body.beneficio_category = beneficioCategory;
-      }
-      if (advanceType === "produtos") {
-        body.product_name = productName;
-      }
-      return api.post("/api/advances", body);
-    },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["advances"] });
       queryClient.invalidateQueries({ queryKey: ["advances-person-month"] });
@@ -151,7 +126,6 @@ export default function AdiantamentosPage() {
       setPersonId("");
       setAmount("");
       setNotes("");
-      setProductName("");
       setInstallments(1);
     },
     onError: (err: Error) => {
@@ -186,7 +160,7 @@ export default function AdiantamentosPage() {
   };
 
   const getAdvanceTypeLabel = (adv: SalaryAdvance) => {
-    const label = ADVANCE_TYPE_LABELS[adv.advance_type] || adv.advance_type;
+    const label = LEGACY_TYPE_LABELS[adv.advance_type] || adv.advance_type;
     if (adv.advance_type === "beneficio" && adv.beneficio_category) {
       return `${label} (${BENEFICIO_LABELS[adv.beneficio_category]})`;
     }
@@ -240,7 +214,7 @@ export default function AdiantamentosPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Adiantamentos</h1>
         <p className="text-sm text-slate-500">
-          Registre adiantamentos de benefício, salário ou produtos
+          Registre adiantamentos para descontar do salário do colaborador
         </p>
       </div>
 
@@ -254,10 +228,6 @@ export default function AdiantamentosPage() {
               e.preventDefault();
               if (!personId || !amount || Number(amount) <= 0) {
                 toast.error("Preencha todos os campos obrigatórios.");
-                return;
-              }
-              if (advanceType === "produtos" && !productName.trim()) {
-                toast.error("Informe o nome do produto.");
                 return;
               }
               createMutation.mutate();
@@ -307,75 +277,16 @@ export default function AdiantamentosPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {selectedPerson && baseSalary > 0 && (
+                <p className="text-xs text-slate-500">
+                  Salário: {formatBRL(baseSalary)} · Usado:{" "}
+                  {formatBRL(salaryUsed)} ·{" "}
+                  <span className="font-semibold text-slate-700">
+                    Disponível: {formatBRL(salaryRemaining)}
+                  </span>
+                </p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label>Tipo de Adiantamento</Label>
-              <Select
-                value={advanceType}
-                onValueChange={(v) => {
-                  if (v) setAdvanceType(v as AdvanceType);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {(v: string | null) =>
-                      v ? ADVANCE_TYPE_LABELS[v as AdvanceType] : "Selecione"
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="beneficio">Benefício</SelectItem>
-                  <SelectItem value="salario">Salário</SelectItem>
-                  <SelectItem value="produtos">Produtos</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {advanceType === "beneficio" && (
-              <div className="space-y-2">
-                <Label>Categoria do Benefício</Label>
-                <Select
-                  value={beneficioCategory}
-                  onValueChange={(v) => {
-                    if (v) setBeneficioCategory(v as BeneficioCategory);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue>
-                      {(v: string | null) =>
-                        v ? BENEFICIO_LABELS[v as BeneficioCategory] : "Selecione"
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alimentacao">Alimentação</SelectItem>
-                    <SelectItem value="transporte">Transporte</SelectItem>
-                    <SelectItem value="refeicao">Refeição</SelectItem>
-                  </SelectContent>
-                </Select>
-                {selectedPerson && (
-                  <p className="text-xs text-slate-500">
-                    Limite: {formatBRL(benefitLimit)} · Usado:{" "}
-                    {formatBRL(benefitUsed)} ·{" "}
-                    <span className="font-semibold text-slate-700">
-                      Disponível: {formatBRL(benefitRemaining)}
-                    </span>
-                  </p>
-                )}
-              </div>
-            )}
-
-            {advanceType === "produtos" && (
-              <div className="space-y-2">
-                <Label>Nome do Produto *</Label>
-                <Input
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="Ex: Cesta básica"
-                />
-              </div>
-            )}
-
             <div className="space-y-2">
               <Label>Valor (R$)</Label>
               <Input
@@ -478,7 +389,6 @@ export default function AdiantamentosPage() {
             <TableRow>
               <TableHead>Pessoa</TableHead>
               <TableHead>Tipo</TableHead>
-              <TableHead>Adiantamento</TableHead>
               <TableHead>Parcela</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Data</TableHead>
@@ -491,7 +401,7 @@ export default function AdiantamentosPage() {
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={8}
                   className="text-center py-8 text-slate-400"
                 >
                   Carregando...
@@ -500,7 +410,7 @@ export default function AdiantamentosPage() {
             ) : advances.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={8}
                   className="text-center py-8 text-slate-400"
                 >
                   Nenhum adiantamento neste mês.
@@ -511,13 +421,9 @@ export default function AdiantamentosPage() {
                 <TableRow key={adv.id}>
                   <TableCell className="font-medium">
                     {getPersonName(adv)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-xs">
-                      {adv.person_type === "driver"
-                        ? "Motorista"
-                        : "Funcionário"}
-                    </Badge>
+                    <div className="text-xs text-slate-400 font-normal">
+                      {adv.person_type === "driver" ? "Motorista" : "Funcionário"}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge
