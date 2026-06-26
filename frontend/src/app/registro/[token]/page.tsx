@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -38,41 +38,38 @@ export default function PublicRegistrationPage() {
     retry: false,
   });
 
-  const [form, setForm] = useState<Record<string, string>>({});
-  const [done, setDone] = useState(false);
-  const set = (k: string) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+  // Edits overlay on top of the loaded data — avoids syncing data into state
+  // via an effect (which the build's lint rules reject).
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [doneOverride, setDoneOverride] = useState<boolean | null>(null);
+  const set = (k: string) => (v: string) => setEdits((e) => ({ ...e, [k]: v }));
 
-  useEffect(() => {
-    if (data) {
-      const o: Record<string, string> = {};
-      for (const k of PUBLIC_FIELDS) {
-        const v = data.fields[k];
-        o[k] = v === null || v === undefined ? "" : String(v);
-      }
-      if (!o.pais_nacionalidade) o.pais_nacionalidade = "BRASIL";
-      setForm(o);
-      if (data.submitted_at) setDone(true);
-    }
-  }, [data]);
+  const val = (k: string): string => {
+    if (k in edits) return edits[k];
+    const v = data?.fields?.[k];
+    if (v !== null && v !== undefined && v !== "") return String(v);
+    if (k === "pais_nacionalidade") return "BRASIL";
+    return "";
+  };
+
+  const done = doneOverride !== null ? doneOverride : !!data?.submitted_at;
 
   const submit = useMutation({
     mutationFn: () => {
       const body: Record<string, unknown> = {};
       for (const k of PUBLIC_FIELDS) {
-        const v = form[k]?.trim();
+        const v = val(k).trim();
         body[k] = v ? v : null;
       }
       return api.put(`/api/public/employee-registration/${token}`, body);
     },
     onSuccess: () => {
-      setDone(true);
+      setDoneOverride(true);
       toast.success("Dados enviados com sucesso!");
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
     onError: () => toast.error("Erro ao enviar. Tente novamente."),
   });
-
-  const required = (k: string) => form[k]?.trim();
 
   const validate = () => {
     const missing: string[] = [];
@@ -93,8 +90,8 @@ export default function PublicRegistrationPage() {
       ["deficiencia", "Deficiência"],
       ["pix_key", "Chave PIX"],
     ];
-    for (const [k, label] of checks) if (!required(k)) missing.push(label);
-    if (!required("telefone_residencial") && !required("telefone_celular"))
+    for (const [k, label] of checks) if (!val(k).trim()) missing.push(label);
+    if (!val("telefone_residencial").trim() && !val("telefone_celular").trim())
       missing.push("Telefone (fixo ou celular)");
     return missing;
   };
@@ -157,7 +154,7 @@ export default function PublicRegistrationPage() {
               <Button
                 variant="outline"
                 className="mt-4"
-                onClick={() => setDone(false)}
+                onClick={() => setDoneOverride(false)}
               >
                 Revisar / editar dados
               </Button>
@@ -178,34 +175,34 @@ export default function PublicRegistrationPage() {
             <Card>
               <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
                 <Field label="Nome Completo *" className="sm:col-span-2">
-                  <Input value={form.name || ""} onChange={(e) => set("name")(e.target.value)} required />
+                  <Input value={val("name")} onChange={(e) => set("name")(e.target.value)} required />
                 </Field>
                 <Field label="CPF *">
                   <Input
-                    value={form.cpf || ""}
+                    value={val("cpf")}
                     onChange={(e) => set("cpf")(cpfMask(e.target.value))}
                     placeholder="000.000.000-00"
                   />
                 </Field>
                 <Field label="Chave PIX *">
-                  <Input value={form.pix_key || ""} onChange={(e) => set("pix_key")(e.target.value)} />
+                  <Input value={val("pix_key")} onChange={(e) => set("pix_key")(e.target.value)} />
                 </Field>
                 <Field label="Data de Nascimento *">
-                  <Input type="date" value={form.date_of_birth || ""} onChange={(e) => set("date_of_birth")(e.target.value)} />
+                  <Input type="date" value={val("date_of_birth")} onChange={(e) => set("date_of_birth")(e.target.value)} />
                 </Field>
                 <Field label="Local de Nascimento *">
-                  <Input value={form.local_nascimento || ""} onChange={(e) => set("local_nascimento")(e.target.value)} placeholder="Cidade - UF" />
+                  <Input value={val("local_nascimento")} onChange={(e) => set("local_nascimento")(e.target.value)} placeholder="Cidade - UF" />
                 </Field>
                 <Field label="Residência (endereço completo) *" className="sm:col-span-2">
-                  <Textarea rows={2} value={form.residencia || ""} onChange={(e) => set("residencia")(e.target.value)} />
+                  <Textarea rows={2} value={val("residencia")} onChange={(e) => set("residencia")(e.target.value)} />
                 </Field>
                 <Field label="País de Nacionalidade *">
-                  <Input value={form.pais_nacionalidade || ""} onChange={(e) => set("pais_nacionalidade")(e.target.value)} />
+                  <Input value={val("pais_nacionalidade")} onChange={(e) => set("pais_nacionalidade")(e.target.value)} />
                 </Field>
                 <Field label="Estado Civil *">
-                  <Select value={form.estado_civil || ""} onValueChange={(v) => v && set("estado_civil")(v)}>
+                  <Select value={val("estado_civil")} onValueChange={(v) => v && set("estado_civil")(v)}>
                     <SelectTrigger>
-                      <span className="flex flex-1 text-left">{form.estado_civil || "Selecione"}</span>
+                      <span className="flex flex-1 text-left">{val("estado_civil") || "Selecione"}</span>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Solteiro">Solteiro(a)</SelectItem>
@@ -217,15 +214,15 @@ export default function PublicRegistrationPage() {
                   </Select>
                 </Field>
                 <Field label="Filiação - Pai *">
-                  <Input value={form.filiacao_pai || ""} onChange={(e) => set("filiacao_pai")(e.target.value)} />
+                  <Input value={val("filiacao_pai")} onChange={(e) => set("filiacao_pai")(e.target.value)} />
                 </Field>
                 <Field label="Filiação - Mãe *">
-                  <Input value={form.filiacao_mae || ""} onChange={(e) => set("filiacao_mae")(e.target.value)} />
+                  <Input value={val("filiacao_mae")} onChange={(e) => set("filiacao_mae")(e.target.value)} />
                 </Field>
                 <Field label="Sexo *">
-                  <Select value={form.sexo || ""} onValueChange={(v) => v && set("sexo")(v)}>
+                  <Select value={val("sexo")} onValueChange={(v) => v && set("sexo")(v)}>
                     <SelectTrigger>
-                      <span className="flex flex-1 text-left">{form.sexo || "Selecione"}</span>
+                      <span className="flex flex-1 text-left">{val("sexo") || "Selecione"}</span>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Masculino">Masculino</SelectItem>
@@ -234,22 +231,22 @@ export default function PublicRegistrationPage() {
                   </Select>
                 </Field>
                 <Field label="Cor / Raça *">
-                  <Input value={form.cor || ""} onChange={(e) => set("cor")(e.target.value)} />
+                  <Input value={val("cor")} onChange={(e) => set("cor")(e.target.value)} />
                 </Field>
                 <Field label="Grau de Instrução *">
-                  <Input value={form.grau_instrucao || ""} onChange={(e) => set("grau_instrucao")(e.target.value)} />
+                  <Input value={val("grau_instrucao")} onChange={(e) => set("grau_instrucao")(e.target.value)} />
                 </Field>
                 <Field label="Deficiência *">
-                  <Input value={form.deficiencia || ""} onChange={(e) => set("deficiencia")(e.target.value)} placeholder="Não / tipo" />
+                  <Input value={val("deficiencia")} onChange={(e) => set("deficiencia")(e.target.value)} placeholder="Não / tipo" />
                 </Field>
                 <Field label="Órgão Emissor (RG) *">
-                  <Input value={form.orgao_emissor || ""} onChange={(e) => set("orgao_emissor")(e.target.value)} placeholder="SSP/UF" />
+                  <Input value={val("orgao_emissor")} onChange={(e) => set("orgao_emissor")(e.target.value)} placeholder="SSP/UF" />
                 </Field>
                 <Field label="Telefone Fixo">
-                  <Input value={form.telefone_residencial || ""} onChange={(e) => set("telefone_residencial")(e.target.value)} />
+                  <Input value={val("telefone_residencial")} onChange={(e) => set("telefone_residencial")(e.target.value)} />
                 </Field>
                 <Field label="Telefone Celular">
-                  <Input value={form.telefone_celular || ""} onChange={(e) => set("telefone_celular")(e.target.value)} />
+                  <Input value={val("telefone_celular")} onChange={(e) => set("telefone_celular")(e.target.value)} />
                 </Field>
               </CardContent>
             </Card>
