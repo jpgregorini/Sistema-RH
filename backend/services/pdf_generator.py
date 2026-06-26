@@ -2,12 +2,20 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import date, datetime
 import io
 import os
 
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "logo-novalog.png")
+
+# Contracting company for the Registro de Empregado (NOT Novalog).
+EMPLOYER = {
+    "name": "JPX DO BRASIL SERVICOS LTDA",
+    "cnpj": "38.535.519/0001-47",
+    "endereco": "Rua PROFESSOR ALMEIDA COUSIN, 125, SALA 718, ENSEADA DO SUA, VITORIA, ES,",
+}
 
 
 def _draw_logo_top_left(c, width: float, height: float) -> float:
@@ -447,6 +455,314 @@ def generate_time_records_batch_pdf(records: list[dict]) -> bytes:
 
         if i < len(records) - 1:
             c.showPage()
+
+    c.save()
+    return buffer.getvalue()
+
+
+# ============================================================
+# REGISTRO DE EMPREGADO (JPX DO BRASIL)
+# ============================================================
+
+# Fields required before the document can be generated.
+# Employee provides personal data; RH provides work data.
+REGISTRO_REQUIRED_EMPLOYEE = [
+    ("name", "Nome do empregado"),
+    ("residencia", "Residência"),
+    ("date_of_birth", "Data de nascimento"),
+    ("local_nascimento", "Local de nascimento"),
+    ("pais_nacionalidade", "País de nacionalidade"),
+    ("estado_civil", "Estado civil"),
+    ("filiacao_pai", "Filiação (pai)"),
+    ("filiacao_mae", "Filiação (mãe)"),
+    ("orgao_emissor", "Órgão emissor"),
+    ("cpf", "CPF"),
+    ("grau_instrucao", "Grau de instrução"),
+    ("sexo", "Sexo"),
+    ("cor", "Cor"),
+    ("deficiencia", "Deficiência"),
+    ("pix_key", "Chave PIX"),
+]
+REGISTRO_REQUIRED_RH = [
+    ("data_admissao", "Data de admissão"),
+    ("base_salary", "Salário"),
+    ("salario_por", "Por (Mês/Hora/...)"),
+    ("horario_trabalho", "Horário de trabalho"),
+    ("horario_intervalo", "Horário de intervalo"),
+    ("fgts_opcao_em", "FGTS - Opção em"),
+]
+
+
+def missing_registro_fields(emp: dict) -> list[str]:
+    """Return human labels of required fields still missing."""
+    missing = []
+    for key, label in REGISTRO_REQUIRED_EMPLOYEE + REGISTRO_REQUIRED_RH:
+        v = emp.get(key)
+        if v is None or (isinstance(v, str) and not v.strip()):
+            missing.append(label)
+    # At least one phone number
+    if not (emp.get("telefone_residencial") or emp.get("telefone_celular")):
+        missing.append("Telefone (fixo ou celular)")
+    return missing
+
+
+def generate_employee_record_pdf(emp: dict) -> bytes:
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    c.setLineWidth(0.6)
+
+    LEFT = 16
+    RIGHT = width - 16  # 579.27
+    W = RIGHT - LEFT
+
+    def g(key: str) -> str:
+        v = emp.get(key)
+        return "" if v is None else str(v)
+
+    def fmt_date(key: str) -> str:
+        v = emp.get(key)
+        if not v:
+            return ""
+        try:
+            d = date.fromisoformat(str(v)[:10])
+            return f"{d.day:02d}/{d.month:02d}/{d.year}"
+        except Exception:
+            return str(v)
+
+    def fit(text: str, max_w: float, size: float, bold: bool):
+        font = "Helvetica-Bold" if bold else "Helvetica"
+        s = size
+        while s > 6 and stringWidth(text, font, s) > max_w:
+            s -= 0.5
+        while text and stringWidth(text, font, s) > max_w:
+            text = text[:-1]
+        return text, s
+
+    def cell(x, top, w, h, label=None, value="", value_bold=False,
+             center=False, value_size=8.5, inline=False):
+        yb = height - top - h
+        c.rect(x, yb, w, h)
+        if inline:
+            # label and value share a baseline (used for tall-value short rows)
+            c.setFont("Helvetica-Bold", 6)
+            lw = stringWidth(label, "Helvetica-Bold", 6) if label else 0
+            by = yb + (h - 8) / 2
+            if label:
+                c.drawString(x + 3, by, label)
+            if value:
+                t, s = fit(str(value), w - lw - 10, 8.5, value_bold)
+                c.setFont("Helvetica-Bold" if value_bold else "Helvetica", s)
+                c.drawString(x + 3 + lw + 4, by, t)
+            return
+        if label:
+            c.setFont("Helvetica", 5.2)
+            c.drawString(x + 2, height - top - 7, label)
+        if value:
+            font = "Helvetica-Bold" if value_bold else "Helvetica"
+            # cap size so the value ascender never collides with the top label
+            max_s = max(6.0, (h - 10) / 0.72) if label else value_size
+            t, s = fit(str(value), w - 6, min(value_size, max_s), value_bold)
+            c.setFont(font, s)
+            vy = yb + (3 if label else (h - s) / 2)
+            if center:
+                c.drawCentredString(x + w / 2, vy, t)
+            else:
+                c.drawString(x + 3, vy, t)
+
+    def band(x, top, w, h, text, size=6.5):
+        yb = height - top - h
+        c.rect(x, yb, w, h)
+        c.setFont("Helvetica-Bold", size)
+        c.drawCentredString(x + w / 2, yb + (h - size) / 2 + 1, text)
+
+    # --- Title ---
+    top = 18
+    band(LEFT, top, W, 20, "REGISTRO DE EMPREGADO", size=12)
+    top += 20
+
+    # --- Row 1: Autenticar | (Matrícula/Nº, Empregador/CNPJ, Endereço) ---
+    matricula = g("matricula_esocial")
+    numero = matricula.zfill(6) if matricula.isdigit() else matricula
+    cell(LEFT, top, 150, 58, "Autenticar")
+    rx = LEFT + 150  # 166
+    cell(rx, top, 330, 18, "Matrícula eSocial", matricula)
+    cell(rx + 330, top, 83, 18, "Nº", numero, center=True, value_bold=True)
+    cell(rx, top + 18, 330, 22, "Empregador", EMPLOYER["name"], value_bold=True)
+    cell(rx + 330, top + 18, 83, 22, "CNPJ", EMPLOYER["cnpj"])
+    cell(rx, top + 40, 413, 18, "Endereço", EMPLOYER["endereco"])
+    top += 58
+
+    # --- Empregado | Beneficiários ---
+    cell(LEFT, top, 360, 26, "Empregado", g("name"), value_bold=True, value_size=11)
+    cell(LEFT + 360, top, W - 360, 26, "Beneficiários", g("beneficiarios"))
+    top += 26
+
+    # --- Residência ---
+    cell(LEFT, top, W, 28, "Residência", g("residencia"))
+    top += 28
+
+    # --- Middle block: photo box on left + data grid ---
+    grid_x = LEFT + 66  # 82
+    GW = RIGHT - grid_x  # 497
+    grid_top = top
+    cell(LEFT, top, 66, 164)  # photo / authentication box
+
+    # R_a
+    widths = [110, 150, 130, GW - 390]
+    x = grid_x
+    cell(x, top, widths[0], 22, "Data de nascimento", fmt_date("date_of_birth")); x += widths[0]
+    cell(x, top, widths[1], 22, "Local do nascimento", g("local_nascimento")); x += widths[1]
+    cell(x, top, widths[2], 22, "País da nacionalidade", g("pais_nacionalidade")); x += widths[2]
+    cell(x, top, widths[3], 22, "Estado civil", g("estado_civil"))
+    top += 22
+    # R_b / R_c filiação (inline label so value doesn't collide on short rows)
+    cell(grid_x, top, GW, 16, "Filiação — Pai:", g("filiacao_pai"), inline=True); top += 16
+    cell(grid_x, top, GW, 16, "Mãe:", g("filiacao_mae"), inline=True); top += 16
+    # R_d
+    widths = [80, 60, 70, 80, 40, 40, GW - 370]
+    labels = ["Cédula de Identidade", "Data de emissão", "Órgão/UF emissor",
+              "Título Eleitoral", "Zona", "Seção", "Inscr. Órgão de Classe"]
+    keys = ["cedula_identidade", "rg_data_emissao", "orgao_emissor",
+            "titulo_eleitoral", "titulo_zona", "titulo_secao", "inscr_orgao_classe"]
+    x = grid_x
+    for wdt, lb, ky in zip(widths, labels, keys):
+        cell(x, top, wdt, 22, lb, g(ky)); x += wdt
+    top += 22
+    # R_e
+    widths = [70, 45, 80, 40, 95, 95, GW - 425]
+    labels = ["CTPS", "Série", "Data de expedição da CTPS", "UF CTPS", "CPF",
+              "Cart. Nac. Habilitação", "Categoria"]
+    keys = ["ctps", "ctps_serie", "ctps_data_expedicao", "ctps_uf", "cpf",
+            "cnh", "cnh_categoria"]
+    x = grid_x
+    for wdt, lb, ky in zip(widths, labels, keys):
+        cell(x, top, wdt, 22, lb, g(ky)); x += wdt
+    top += 22
+    # R_f
+    widths = [85, 70, 80, 90, GW - 325]
+    labels = ["Doc. militar", "Categoria", "Cor", "Sexo", "Grau de instrução"]
+    keys = ["doc_militar", "doc_militar_categoria", "cor", "sexo", "grau_instrucao"]
+    x = grid_x
+    for wdt, lb, ky in zip(widths, labels, keys):
+        cell(x, top, wdt, 22, lb, g(ky)); x += wdt
+    top += 22
+    # R_g
+    widths = [120, 180, GW - 300]
+    labels = ["Deficiência", "Telefone Residencial", "Telefone Celular"]
+    keys = ["deficiencia", "telefone_residencial", "telefone_celular"]
+    x = grid_x
+    for wdt, lb, ky in zip(widths, labels, keys):
+        cell(x, top, wdt, 22, lb, g(ky)); x += wdt
+    top += 22
+    # R_h
+    cell(grid_x, top, 230, 22, "Cargo", g("cargo"), value_bold=True)
+    cell(grid_x + 230, top, 190, 22, "Função", g("funcao"))
+    cell(grid_x + 420, top, GW - 420, 22, "C.B.O.", g("cbo"))
+    top = grid_top + 164
+
+    # --- Admissão row ---
+    salario = emp.get("base_salary")
+    salario_str = ""
+    if salario:
+        salario_str = (
+            f"R$ {float(salario):,.2f}"
+            .replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+    widths = [95, 105, 70, 150, W - 420]
+    labels = ["Data de Admissão", "Salário", "Por", "Horário de Trabalho",
+              "Horário de Intervalo"]
+    vals = [fmt_date("data_admissao"), salario_str, g("salario_por"),
+            g("horario_trabalho"), g("horario_intervalo")]
+    x = LEFT
+    for wdt, lb, vl in zip(widths, labels, vals):
+        cell(x, top, wdt, 26, lb, vl); x += wdt
+    top += 26
+
+    # --- FGTS row ---
+    cell(LEFT, top, 46, 22, "FGTS")
+    cell(LEFT + 46, top, 110, 22, "Opção em", fmt_date("fgts_opcao_em"))
+    cell(LEFT + 156, top, 220, 22, "Conta vinculada no banco", g("conta_vinculada_banco"))
+    cell(LEFT + 376, top, W - 376, 22, "Data da Ratificação", g("data_ratificacao"))
+    top += 22
+
+    # --- PIS section ---
+    band(LEFT, top, W, 12, "PROGRAMA DE INTEGRAÇÃO SOCIAL - PIS", size=6.5)
+    top += 12
+    cell(LEFT, top, 160, 18, "Cadastrado em", g("pis_cadastrado_em"))
+    cell(LEFT + 160, top, 140, 18, "Sob nº", g("pis_sob_n"))
+    cell(LEFT + 300, top, W - 300, 18, "Domicílio bancário", g("pis_domicilio_bancario"))
+    top += 18
+    cell(LEFT, top, 160, 18, "Nº banco", g("pis_n_banco"))
+    cell(LEFT + 160, top, 140, 18, "Agência código", g("pis_agencia_codigo"))
+    cell(LEFT + 300, top, W - 300, 18, "End. da agência", g("pis_end_agencia"))
+    top += 18
+
+    # --- Alterações (blank) ---
+    band(LEFT, top, W, 12, "ALTERAÇÕES DE SALÁRIO, CARGO E/OU FUNÇÃO", size=6.5)
+    top += 12
+    cell(LEFT, top, W, 80)
+    c.line(LEFT + W / 2, height - top - 80, LEFT + W / 2, height - top)
+    top += 80
+
+    # --- Férias + Obs (blank) ---
+    fw = [120, 120, 120, W - 360]
+    flabels = ["FÉRIAS - PERÍODO AQUISITIVO", "FÉRIAS - PERÍODO DE GOZO",
+               "FÉRIAS - PERÍODO ABONO PECUNIÁRIO",
+               "Obs.: (Anotar advertências, suspensões, transferências, etc.)"]
+    x = LEFT
+    for i, (wdt, lb) in enumerate(zip(fw, flabels)):
+        yb = height - top - 80
+        c.rect(x, yb, wdt, 80)
+        c.setFont("Helvetica", 5.0)
+        # wrap label inside narrow header
+        for li, line in enumerate(simpleSplit(lb, "Helvetica", 5.0, wdt - 4)):
+            c.drawString(x + 2, height - top - 7 - li * 6, line)
+        if i == 3:  # obs lines
+            for ln in range(1, 6):
+                ly = yb + 80 - 22 - ln * 11
+                if ly > yb + 4:
+                    c.line(x + 4, ly, x + wdt - 4, ly)
+        x += wdt
+    top += 80
+
+    # --- Acidentes | Rescisão (blank) ---
+    cell(LEFT, top, 300, 88)
+    c.setFont("Helvetica", 5.2)
+    for li, line in enumerate(simpleSplit(
+            "ACIDENTES DE TRABALHO, DOENÇAS OU DOENÇAS PROFISSIONAIS",
+            "Helvetica", 5.2, 296)):
+        c.drawCentredString(LEFT + 150, height - top - 7 - li * 6, line)
+    cell(LEFT + 300, top, W - 300, 88)
+    c.setFont("Helvetica-Bold", 5.5)
+    c.drawCentredString(LEFT + 300 + (W - 300) / 2, height - top - 8,
+                        "RESCISÃO DE CONTRATO DE TRABALHO")
+    c.setFont("Helvetica", 7)
+    rxx = LEFT + 306
+    ry = height - top - 26
+    c.drawString(rxx, ry, "Data da saída:")
+    c.drawString(rxx, ry - 16, "Data aviso ind.:")
+    c.drawString(rxx + 120, ry - 16, "Data projeção:")
+    c.drawString(rxx, ry - 32, "Tipo do desligamento:")
+    top += 88
+
+    # --- Contribuição Sindical | Assinaturas ---
+    cell(LEFT, top, 300, 90)
+    c.setFont("Helvetica-Bold", 5.5)
+    c.drawCentredString(LEFT + 150, height - top - 8, "CONTRIBUIÇÃO SINDICAL")
+    # right signatures (open area, just rect border)
+    c.rect(LEFT + 300, height - top - 90, W - 300, 90)
+    sig_cx = LEFT + 300 + (W - 300) / 2
+    c.setFont("Helvetica", 8.5)
+    # signature lines sit ABOVE each name (space to sign by hand)
+    c.line(sig_cx - 120, height - top - 38, sig_cx + 120, height - top - 38)
+    c.drawCentredString(sig_cx, height - top - 48, g("name"))
+    c.line(sig_cx - 120, height - top - 72, sig_cx + 120, height - top - 72)
+    c.drawCentredString(sig_cx, height - top - 82, EMPLOYER["name"])
+    top += 90
+
+    # --- Observações footer ---
+    band(LEFT, top, W, 12, "OBSERVAÇÕES", size=6.5)
 
     c.save()
     return buffer.getvalue()

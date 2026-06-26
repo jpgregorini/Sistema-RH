@@ -82,7 +82,67 @@ class DriverUpdate(BaseModel):
 
 
 # --- Employee ---
-class EmployeeCreate(BaseModel):
+# Fields used to generate the "Registro de Empregado" document. Most are
+# optional free-text; some are filled by the employee via the public link.
+class EmployeeRegistrationFields(BaseModel):
+    # Registration flow
+    registration_mode: str | None = None  # 'manual' | 'link'
+    matricula_esocial: str | None = None
+    beneficiarios: str | None = None
+
+    # Personal (employee-fillable)
+    residencia: str | None = None
+    local_nascimento: str | None = None
+    pais_nacionalidade: str | None = None
+    estado_civil: str | None = None
+    filiacao_pai: str | None = None
+    filiacao_mae: str | None = None
+    orgao_emissor: str | None = None
+    grau_instrucao: str | None = None
+    sexo: str | None = None
+    cor: str | None = None
+    deficiencia: str | None = None
+    telefone_residencial: str | None = None
+    telefone_celular: str | None = None
+
+    # Identity documents
+    cedula_identidade: str | None = None
+    rg_data_emissao: str | None = None
+    titulo_eleitoral: str | None = None
+    titulo_zona: str | None = None
+    titulo_secao: str | None = None
+    inscr_orgao_classe: str | None = None
+    ctps: str | None = None
+    ctps_serie: str | None = None
+    ctps_data_expedicao: str | None = None
+    ctps_uf: str | None = None
+    cnh: str | None = None
+    cnh_categoria: str | None = None
+    doc_militar: str | None = None
+    doc_militar_categoria: str | None = None
+
+    # Work (RH)
+    cargo: str | None = None
+    funcao: str | None = None
+    cbo: str | None = None
+    data_admissao: date | None = None
+    salario_por: str | None = None
+    horario_trabalho: str | None = None
+    horario_intervalo: str | None = None
+    fgts_opcao_em: date | None = None
+    conta_vinculada_banco: str | None = None
+    data_ratificacao: str | None = None
+
+    # PIS / bank
+    pis_cadastrado_em: str | None = None
+    pis_sob_n: str | None = None
+    pis_domicilio_bancario: str | None = None
+    pis_n_banco: str | None = None
+    pis_agencia_codigo: str | None = None
+    pis_end_agencia: str | None = None
+
+
+class EmployeeCreate(EmployeeRegistrationFields):
     name: str
     cpf: str
     date_of_birth: date | None = None
@@ -101,7 +161,7 @@ class EmployeeCreate(BaseModel):
     periculosidade: bool = False
 
 
-class EmployeeUpdate(BaseModel):
+class EmployeeUpdate(EmployeeRegistrationFields):
     name: str | None = None
     cpf: str | None = None
     date_of_birth: date | None = None
@@ -119,6 +179,27 @@ class EmployeeUpdate(BaseModel):
     beneficio_refeicao: float | None = None
     insalubridade_pct: int | None = None
     periculosidade: bool | None = None
+
+
+# Subset the new employee fills in via the public registration link.
+class EmployeeRegistrationPublic(BaseModel):
+    name: str | None = None
+    cpf: str | None = None
+    pix_key: str | None = None
+    date_of_birth: date | None = None
+    residencia: str | None = None
+    local_nascimento: str | None = None
+    pais_nacionalidade: str | None = None
+    estado_civil: str | None = None
+    filiacao_pai: str | None = None
+    filiacao_mae: str | None = None
+    orgao_emissor: str | None = None
+    grau_instrucao: str | None = None
+    sexo: str | None = None
+    cor: str | None = None
+    deficiencia: str | None = None
+    telefone_residencial: str | None = None
+    telefone_celular: str | None = None
 
 
 # --- Trip ---

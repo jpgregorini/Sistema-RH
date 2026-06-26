@@ -57,6 +57,70 @@ export interface Employee {
   periculosidade: boolean;
   created_at: string;
   updated_at: string;
+
+  // Registro de Empregado
+  registration_mode?: string | null;
+  registration_token?: string | null;
+  registration_submitted_at?: string | null;
+  matricula_esocial?: string | null;
+  beneficiarios?: string | null;
+  residencia?: string | null;
+  local_nascimento?: string | null;
+  pais_nacionalidade?: string | null;
+  estado_civil?: string | null;
+  filiacao_pai?: string | null;
+  filiacao_mae?: string | null;
+  orgao_emissor?: string | null;
+  grau_instrucao?: string | null;
+  sexo?: string | null;
+  cor?: string | null;
+  deficiencia?: string | null;
+  telefone_residencial?: string | null;
+  telefone_celular?: string | null;
+  cedula_identidade?: string | null;
+  rg_data_emissao?: string | null;
+  titulo_eleitoral?: string | null;
+  titulo_zona?: string | null;
+  titulo_secao?: string | null;
+  inscr_orgao_classe?: string | null;
+  ctps?: string | null;
+  ctps_serie?: string | null;
+  ctps_data_expedicao?: string | null;
+  ctps_uf?: string | null;
+  cnh?: string | null;
+  cnh_categoria?: string | null;
+  doc_militar?: string | null;
+  doc_militar_categoria?: string | null;
+  cargo?: string | null;
+  funcao?: string | null;
+  cbo?: string | null;
+  data_admissao?: string | null;
+  salario_por?: string | null;
+  horario_trabalho?: string | null;
+  horario_intervalo?: string | null;
+  fgts_opcao_em?: string | null;
+  conta_vinculada_banco?: string | null;
+  data_ratificacao?: string | null;
+  pis_cadastrado_em?: string | null;
+  pis_sob_n?: string | null;
+  pis_domicilio_bancario?: string | null;
+  pis_n_banco?: string | null;
+  pis_agencia_codigo?: string | null;
+  pis_end_agencia?: string | null;
+}
+
+export interface RegistroStatus {
+  can_generate: boolean;
+  missing: string[];
+  registration_mode?: string | null;
+  registration_token?: string | null;
+  registration_submitted_at?: string | null;
+}
+
+export interface PublicRegistration {
+  employer: { name: string; cnpj: string; endereco: string };
+  submitted_at: string | null;
+  fields: Record<string, string | null>;
 }
 
 export interface TripCargo {

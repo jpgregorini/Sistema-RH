@@ -13,16 +13,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, FileText, Copy } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { formatCPF, formatBRL } from "@/lib/format";
 import { toast } from "sonner";
-import type { Employee } from "@/types";
+import type { Employee, RegistroStatus } from "@/types";
 
 export default function FuncionariosPage() {
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: ["employees"],
@@ -42,6 +43,41 @@ export default function FuncionariosPage() {
       e.name.toLowerCase().includes(search.toLowerCase()) ||
       e.cpf.includes(search)
   );
+
+  const copyLink = (emp: Employee) => {
+    if (!emp.registration_token) {
+      toast.error("Sem link gerado. Edite o funcionário para gerar.");
+      return;
+    }
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    navigator.clipboard.writeText(`${origin}/registro/${emp.registration_token}`);
+    toast.success("Link copiado.");
+  };
+
+  const generateRegistro = async (emp: Employee) => {
+    try {
+      const status = await api.get<RegistroStatus>(
+        `/api/employees/${emp.id}/registro-status`
+      );
+      if (!status.can_generate) {
+        toast.error("Faltam campos: " + status.missing.join(", "));
+        return;
+      }
+      window.open(`${apiUrl}/api/employees/${emp.id}/registro-pdf`, "_blank");
+    } catch {
+      toast.error("Erro ao verificar o registro.");
+    }
+  };
+
+  const registroBadge = (emp: Employee) => {
+    if (emp.registration_mode !== "link") {
+      return <span className="text-xs text-slate-400">—</span>;
+    }
+    if (emp.registration_submitted_at) {
+      return <Badge className="bg-emerald-100 text-emerald-700">Recebido</Badge>;
+    }
+    return <Badge className="bg-amber-100 text-amber-700">Aguardando</Badge>;
+  };
 
   return (
     <div>
@@ -80,9 +116,9 @@ export default function FuncionariosPage() {
               <TableHead>CPF</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Salário Base</TableHead>
-              <TableHead>Dia Pgto</TableHead>
+              <TableHead>Registro</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-24">Ações</TableHead>
+              <TableHead className="w-44">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -118,7 +154,7 @@ export default function FuncionariosPage() {
                   <TableCell>
                     {emp.base_salary ? formatBRL(emp.base_salary) : "—"}
                   </TableCell>
-                  <TableCell>Dia {emp.payday}</TableCell>
+                  <TableCell>{registroBadge(emp)}</TableCell>
                   <TableCell>
                     <Badge
                       variant={emp.active ? "default" : "secondary"}
@@ -129,8 +165,28 @@ export default function FuncionariosPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
+                      {emp.registration_mode === "link" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-blue-600"
+                          title="Copiar link do funcionário"
+                          onClick={() => copyLink(emp)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-blue-600"
+                        title="Gerar Registro de Empregado"
+                        onClick={() => generateRegistro(emp)}
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
                       <Link href={`/funcionarios/${emp.id}`}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar">
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </Link>
@@ -138,6 +194,7 @@ export default function FuncionariosPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-red-500 hover:text-red-700"
+                        title="Desativar"
                         onClick={() => {
                           if (confirm("Deseja desativar este funcionário?")) {
                             deleteMutation.mutate(emp.id);

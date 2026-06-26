@@ -12,6 +12,7 @@ from routers import (
     ai,
     product_deductions,
     time_records,
+    public_registration,
 )
 
 app = FastAPI(title="Novalog HR API")
@@ -36,6 +37,11 @@ app.include_router(
     tags=["Saída de Produto"],
 )
 app.include_router(time_records.router, prefix="/api/time-records", tags=["Horários"])
+app.include_router(
+    public_registration.router,
+    prefix="/api/public/employee-registration",
+    tags=["Registro Público"],
+)
 app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 
 
