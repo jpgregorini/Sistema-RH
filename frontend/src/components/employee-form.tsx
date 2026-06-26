@@ -184,8 +184,11 @@ export function EmployeeForm({ employee }: EmployeeFormProps) {
     window.open(`${apiUrl}/api/employees/${employee!.id}/registro-pdf`, "_blank");
   };
 
-  // Personal section is hidden in create+link mode (employee fills it).
-  const showPersonal = !(mode === "link" && !isEditing);
+  // In create+link mode the employee fills personal data AND name/CPF via the
+  // public link, so RH doesn't enter those here.
+  const linkCreate = mode === "link" && !isEditing;
+  const showPersonal = !linkCreate;
+  const showIdentity = !linkCreate;
 
   return (
     <div className="max-w-4xl">
@@ -288,17 +291,25 @@ export function EmployeeForm({ employee }: EmployeeFormProps) {
       >
         {/* Identificação */}
         <Section title="Identificação">
-          <Field label="Nome Completo *" className="sm:col-span-2">
-            <Input value={form.name} onChange={(e) => set("name")(e.target.value)} required />
-          </Field>
-          <Field label="CPF *">
-            <Input
-              value={form.cpf}
-              onChange={(e) => set("cpf")(cpfMask(e.target.value))}
-              placeholder="000.000.000-00"
-              required
-            />
-          </Field>
+          {showIdentity ? (
+            <>
+              <Field label="Nome Completo *" className="sm:col-span-2">
+                <Input value={form.name} onChange={(e) => set("name")(e.target.value)} required />
+              </Field>
+              <Field label="CPF *">
+                <Input
+                  value={form.cpf}
+                  onChange={(e) => set("cpf")(cpfMask(e.target.value))}
+                  placeholder="000.000.000-00"
+                  required
+                />
+              </Field>
+            </>
+          ) : (
+            <div className="sm:col-span-2 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+              Nome e CPF serão preenchidos pelo próprio funcionário através do link.
+            </div>
+          )}
           <Field label="Tipo de Contrato *">
             <Select value={contractType} onValueChange={(v) => v && setContractType(v as ContractType)}>
               <SelectTrigger>

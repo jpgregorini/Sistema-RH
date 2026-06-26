@@ -143,8 +143,9 @@ class EmployeeRegistrationFields(BaseModel):
 
 
 class EmployeeCreate(EmployeeRegistrationFields):
-    name: str
-    cpf: str
+    # Optional: in link mode the employee fills name/CPF via the public link.
+    name: str | None = None
+    cpf: str | None = None
     date_of_birth: date | None = None
     contract_type: ContractType
     base_salary: float | None = None

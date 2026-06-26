@@ -9,8 +9,17 @@ from services.pdf_generator import (
 from datetime import date
 from uuid import uuid4
 import io
+import zipfile
+import httpx
 
 router = APIRouter()
+
+# Employee-uploaded documents included in the accounting ZIP.
+ZIP_DOCS = [
+    ("comprovante_endereco", "doc_comprovante_endereco_url"),
+    ("rg_cnh", "doc_rg_cnh_url"),
+    ("foto", "photo_url"),
+]
 
 # Date-typed columns that need ISO serialization before insert/update.
 DATE_FIELDS = ("date_of_birth", "data_admissao", "fgts_opcao_em")
@@ -139,6 +148,52 @@ def registro_pdf(employee_id: str):
         media_type="application/pdf",
         headers={
             "Content-Disposition": f"inline; filename=registro_empregado_{fname_cpf}.pdf"
+        },
+    )
+
+
+@router.get("/{employee_id}/registro-zip")
+def registro_zip(employee_id: str):
+    """ZIP for accounting: Registro de Empregado PDF + uploaded documents."""
+    db = get_supabase()
+    emp = (
+        db.table("employees").select("*").eq("id", employee_id).single().execute()
+    ).data
+    if not emp:
+        raise HTTPException(status_code=404, detail="Funcionário não encontrado.")
+
+    missing = missing_registro_fields(emp)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail="Campos obrigatórios faltando: " + ", ".join(missing),
+        )
+
+    pdf_bytes = generate_employee_record_pdf(emp)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("Registro_de_Empregado.pdf", pdf_bytes)
+        for label, col in ZIP_DOCS:
+            url = emp.get(col)
+            if not url:
+                continue
+            try:
+                r = httpx.get(url, timeout=30, follow_redirects=True)
+                r.raise_for_status()
+                ext = url.split("?")[0].rsplit(".", 1)[-1][:5] or "bin"
+                z.writestr(f"{label}.{ext}", r.content)
+            except Exception:
+                # Skip a document that fails to download rather than failing the ZIP
+                pass
+
+    buf.seek(0)
+    fname_cpf = (emp.get("cpf") or "").replace(".", "").replace("-", "") or employee_id
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=registro_{fname_cpf}.zip"
         },
     )
 

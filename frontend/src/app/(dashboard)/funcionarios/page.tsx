@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Pencil, Trash2, FileText, Copy } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, FileText, Copy, Archive } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { formatCPF, formatBRL } from "@/lib/format";
@@ -40,8 +40,8 @@ export default function FuncionariosPage() {
 
   const filtered = employees.filter(
     (e) =>
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.cpf.includes(search)
+      (e.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (e.cpf || "").includes(search)
   );
 
   const copyLink = (emp: Employee) => {
@@ -66,6 +66,21 @@ export default function FuncionariosPage() {
       window.open(`${apiUrl}/api/employees/${emp.id}/registro-pdf`, "_blank");
     } catch {
       toast.error("Erro ao verificar o registro.");
+    }
+  };
+
+  const downloadZip = async (emp: Employee) => {
+    try {
+      const status = await api.get<RegistroStatus>(
+        `/api/employees/${emp.id}/registro-status`
+      );
+      if (!status.can_generate) {
+        toast.error("Faltam campos: " + status.missing.join(", "));
+        return;
+      }
+      window.open(`${apiUrl}/api/employees/${emp.id}/registro-zip`, "_blank");
+    } catch {
+      toast.error("Erro ao gerar o ZIP.");
     }
   };
 
@@ -118,7 +133,7 @@ export default function FuncionariosPage() {
               <TableHead>Salário Base</TableHead>
               <TableHead>Registro</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-44">Ações</TableHead>
+              <TableHead className="w-56">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -137,8 +152,12 @@ export default function FuncionariosPage() {
             ) : (
               filtered.map((emp) => (
                 <TableRow key={emp.id}>
-                  <TableCell className="font-medium">{emp.name}</TableCell>
-                  <TableCell>{formatCPF(emp.cpf)}</TableCell>
+                  <TableCell className="font-medium">
+                    {emp.name || (
+                      <span className="text-slate-400 italic">aguardando</span>
+                    )}
+                  </TableCell>
+                  <TableCell>{emp.cpf ? formatCPF(emp.cpf) : "—"}</TableCell>
                   <TableCell>
                     <Badge
                       variant="secondary"
@@ -180,10 +199,19 @@ export default function FuncionariosPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-blue-600"
-                        title="Gerar Registro de Empregado"
+                        title="Gerar Registro de Empregado (PDF)"
                         onClick={() => generateRegistro(emp)}
                       >
                         <FileText className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-emerald-600"
+                        title="Baixar ZIP (Registro + documentos) p/ contabilidade"
+                        onClick={() => downloadZip(emp)}
+                      >
+                        <Archive className="h-4 w-4" />
                       </Button>
                       <Link href={`/funcionarios/${emp.id}`}>
                         <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar">

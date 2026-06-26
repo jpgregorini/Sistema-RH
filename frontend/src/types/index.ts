@@ -107,6 +107,8 @@ export interface Employee {
   pis_n_banco?: string | null;
   pis_agencia_codigo?: string | null;
   pis_end_agencia?: string | null;
+  doc_comprovante_endereco_url?: string | null;
+  doc_rg_cnh_url?: string | null;
 }
 
 export interface RegistroStatus {
@@ -121,6 +123,7 @@ export interface PublicRegistration {
   employer: { name: string; cnpj: string; endereco: string };
   submitted_at: string | null;
   fields: Record<string, string | null>;
+  documents: Record<string, string | null>;
 }
 
 export interface TripCargo {

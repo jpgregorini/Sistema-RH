@@ -17,9 +17,15 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Upload, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { PublicRegistration } from "@/types";
+
+const DOC_LABELS: { kind: string; label: string; optional?: boolean }[] = [
+  { kind: "comprovante_endereco", label: "Comprovante de Endereço" },
+  { kind: "rg_cnh", label: "RG / CNH" },
+  { kind: "foto", label: "Foto", optional: true },
+];
 
 const PUBLIC_FIELDS = [
   "name", "cpf", "pix_key", "date_of_birth", "residencia", "local_nascimento",
@@ -42,7 +48,30 @@ export default function PublicRegistrationPage() {
   // via an effect (which the build's lint rules reject).
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [doneOverride, setDoneOverride] = useState<boolean | null>(null);
+  const [docOverlay, setDocOverlay] = useState<Record<string, string>>({});
+  const [uploadingKind, setUploadingKind] = useState<string | null>(null);
   const set = (k: string) => (v: string) => setEdits((e) => ({ ...e, [k]: v }));
+
+  const docUrl = (kind: string): string =>
+    docOverlay[kind] ?? (data?.documents?.[kind] ?? "") ?? "";
+
+  const uploadDoc = async (kind: string, file: File) => {
+    setUploadingKind(kind);
+    try {
+      const fd = new FormData();
+      fd.append("kind", kind);
+      fd.append("file", file);
+      const r = await api.upload<{ kind: string; url: string }>(
+        `/api/public/employee-registration/${token}/document`,
+        fd
+      );
+      setDocOverlay((o) => ({ ...o, [kind]: r.url }));
+      toast.success("Documento enviado.");
+    } catch {
+      toast.error("Erro ao enviar documento.");
+    }
+    setUploadingKind(null);
+  };
 
   const val = (k: string): string => {
     if (k in edits) return edits[k];
@@ -248,6 +277,63 @@ export default function PublicRegistrationPage() {
                 <Field label="Telefone Celular">
                   <Input value={val("telefone_celular")} onChange={(e) => set("telefone_celular")(e.target.value)} />
                 </Field>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+              <CardContent className="p-6">
+                <p className="mb-1 text-sm font-semibold text-slate-700">
+                  Documentos
+                </p>
+                <p className="mb-4 text-xs text-slate-500">
+                  Anexe foto ou PDF dos documentos. Comprovante de Endereço e
+                  RG/CNH são necessários; foto é opcional.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {DOC_LABELS.map(({ kind, label, optional }) => {
+                    const url = docUrl(kind);
+                    const busy = uploadingKind === kind;
+                    return (
+                      <div key={kind} className="space-y-2">
+                        <Label>
+                          {label} {optional ? "" : "*"}
+                        </Label>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600 transition-colors hover:border-blue-400">
+                          {url ? (
+                            <FileText className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <Upload className="h-4 w-4" />
+                          )}
+                          {busy
+                            ? "Enviando..."
+                            : url
+                            ? "Trocar arquivo"
+                            : "Enviar arquivo"}
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*,application/pdf"
+                            disabled={busy}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) uploadDoc(kind, file);
+                            }}
+                          />
+                        </label>
+                        {url && (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-emerald-600 underline"
+                          >
+                            Arquivo enviado
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
 

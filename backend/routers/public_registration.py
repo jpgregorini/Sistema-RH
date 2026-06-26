@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from database import get_supabase
 from models.schemas import EmployeeRegistrationPublic
 from services.pdf_generator import EMPLOYER
@@ -13,6 +13,13 @@ PUBLIC_FIELDS = [
     "orgao_emissor", "grau_instrucao", "sexo", "cor", "deficiencia",
     "telefone_residencial", "telefone_celular",
 ]
+
+# Document kinds the employee can upload -> employee column.
+DOC_COLUMNS = {
+    "comprovante_endereco": "doc_comprovante_endereco_url",
+    "rg_cnh": "doc_rg_cnh_url",
+    "foto": "photo_url",
+}
 
 
 def _find_by_token(db, token: str) -> dict:
@@ -36,6 +43,7 @@ def get_registration(token: str):
         "employer": EMPLOYER,
         "submitted_at": emp.get("registration_submitted_at"),
         "fields": {k: emp.get(k) for k in PUBLIC_FIELDS},
+        "documents": {kind: emp.get(col) for kind, col in DOC_COLUMNS.items()},
     }
 
 
@@ -45,12 +53,40 @@ def submit_registration(token: str, data: EmployeeRegistrationPublic):
     emp = _find_by_token(db, token)
 
     update = data.model_dump(exclude_none=True)
-    # Serialize date
     if isinstance(update.get("date_of_birth"), date):
         update["date_of_birth"] = update["date_of_birth"].isoformat()
-    # Guard: only public fields
     update = {k: v for k, v in update.items() if k in PUBLIC_FIELDS}
     update["registration_submitted_at"] = datetime.utcnow().isoformat()
 
     db.table("employees").update(update).eq("id", emp["id"]).execute()
     return {"ok": True}
+
+
+@router.post("/{token}/document")
+async def upload_document(
+    token: str,
+    kind: str = Form(...),
+    file: UploadFile = File(...),
+):
+    if kind not in DOC_COLUMNS:
+        raise HTTPException(status_code=400, detail="Tipo de documento inválido.")
+
+    db = get_supabase()
+    emp = _find_by_token(db, token)
+
+    contents = await file.read()
+    ext = (file.filename or "").split(".")[-1].lower() or "bin"
+    path = f"emp_{emp['id']}/{kind}_{int(datetime.utcnow().timestamp())}.{ext}"
+
+    db.storage.from_("documents").upload(
+        path,
+        contents,
+        {"content-type": file.content_type or "application/octet-stream"},
+    )
+    public_url = db.storage.from_("documents").get_public_url(path)
+
+    db.table("employees").update(
+        {DOC_COLUMNS[kind]: public_url}
+    ).eq("id", emp["id"]).execute()
+
+    return {"kind": kind, "url": public_url}
