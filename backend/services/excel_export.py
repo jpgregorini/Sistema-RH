@@ -2,6 +2,105 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 import io
 
+# Company that pays salaries and benefits (shown on every report).
+PAYER_NAME = "JPX DO BRASIL SERVICOS LTDA"
+PAYER_CNPJ = "38.535.519/0001-47"
+
+BENEFIT_LABELS = {
+    "alimentacao": "Alimentação",
+    "transporte": "Transporte",
+    "refeicao": "Refeição",
+}
+BENEFIT_VALOR_KEY = {
+    "alimentacao": "alimentacao_valor",
+    "transporte": "transporte_valor",
+    "refeicao": "refeicao_valor",
+}
+BENEFIT_COLUMN = {
+    "alimentacao": "beneficio_alimentacao",
+    "transporte": "beneficio_transporte",
+    "refeicao": "beneficio_refeicao",
+}
+
+
+def _benefit_value(p: dict, category: str) -> float:
+    breakdown = p.get("breakdown") or {}
+    benefit = breakdown.get("benefit") or {}
+    col = BENEFIT_COLUMN[category]
+    valor_key = BENEFIT_VALOR_KEY[category]
+    return float(p.get(col) or benefit.get(valor_key) or 0)
+
+
+def generate_benefit_payment_report(
+    payroll_data: list[dict],
+    month: str,
+    category: str,
+    title: str,
+) -> bytes:
+    """Single-benefit payment report for the company's financial team.
+    Columns: Nome, Valor, Chave PIX. Only people who receive that benefit."""
+    wb = Workbook()
+    ws = wb.active
+    label = BENEFIT_LABELS.get(category, category)
+    ws.title = f"{label}"[:31]
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+    border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+    money_fmt = '#,##0.00'
+
+    ws.merge_cells("A1:C1")
+    ws["A1"] = f"Pagamento de Benefício - {label} - {title} - {month}"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    ws.merge_cells("A2:C2")
+    ws["A2"] = f"Pago por {PAYER_NAME} - CNPJ {PAYER_CNPJ}"
+    ws["A2"].font = Font(size=10, italic=True)
+    ws["A2"].alignment = Alignment(horizontal="center")
+
+    headers = ["Nome", "Valor (R$)", "Chave PIX"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = border
+
+    rows = [p for p in payroll_data if _benefit_value(p, category) > 0]
+    row_idx = 5
+    total = 0.0
+    for p in rows:
+        value = _benefit_value(p, category)
+        total += value
+        breakdown = p.get("breakdown") or {}
+        pix = breakdown.get("pix_key") or p.get("pix_key") or ""
+        ws.cell(row=row_idx, column=1, value=p.get("person_name", "")).border = border
+        cell = ws.cell(row=row_idx, column=2, value=value)
+        cell.number_format = money_fmt
+        cell.border = border
+        ws.cell(row=row_idx, column=3, value=pix).border = border
+        row_idx += 1
+
+    ws.cell(row=row_idx, column=1, value="TOTAL").font = Font(bold=True)
+    ws.cell(row=row_idx, column=1).border = border
+    cell = ws.cell(row=row_idx, column=2, value=round(total, 2))
+    cell.font = Font(bold=True)
+    cell.number_format = money_fmt
+    cell.border = border
+    ws.cell(row=row_idx, column=3).border = border
+
+    ws.column_dimensions["A"].width = 32
+    ws.column_dimensions["B"].width = 16
+    ws.column_dimensions["C"].width = 30
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
 
 def generate_payroll_excel(
     payroll_data: list[dict],

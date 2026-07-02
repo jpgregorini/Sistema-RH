@@ -3,10 +3,15 @@ from fastapi.responses import StreamingResponse
 from database import get_supabase
 from models.schemas import PayrollCalculateRequest, PayrollUpdate
 from services.payroll_calc import calculate_payroll
-from services.excel_export import generate_payroll_excel
+from services.excel_export import (
+    generate_payroll_excel,
+    generate_benefit_payment_report,
+    _benefit_value,
+)
 from services.pdf_generator import generate_benefit_receipt_pdf
 from datetime import date as date_type
 import io
+import zipfile
 
 router = APIRouter()
 
@@ -180,6 +185,10 @@ def update_payroll(payroll_id: str, data: PayrollUpdate):
         update["included_salary"] = data.included_salary
     if data.included_benefits is not None:
         update["included_benefits"] = data.included_benefits
+    if data.paid_salary is not None:
+        update["paid_salary"] = data.paid_salary
+    if data.paid_benefits is not None:
+        update["paid_benefits"] = data.paid_benefits
     if not update:
         raise HTTPException(status_code=400, detail="Nada para atualizar.")
     result = (
@@ -247,6 +256,95 @@ def benefit_receipt(payroll_id: str, category: str):
         headers={
             "Content-Disposition": (
                 f"inline; filename=comprovante_{category}_{fname_cpf}_{enriched['month']}.pdf"
+            )
+        },
+    )
+
+
+def _benefit_rows(db, month: str, person_type: str) -> list[dict]:
+    """Enriched, included payroll rows for a person_type/month."""
+    if person_type not in ("driver", "employee"):
+        raise HTTPException(status_code=400, detail="person_type inválido.")
+    rows = (
+        db.table("payroll")
+        .select("*")
+        .eq("month", month)
+        .eq("person_type", person_type)
+        .eq("included_benefits", True)
+        .execute()
+    ).data
+    return _enrich(db, rows)
+
+
+@router.get("/benefit-report")
+def benefit_report(month: str, category: str, person_type: str):
+    """Excel report (Nome, Valor, Chave PIX) for one benefit type, for the
+    company's financial team. Covers all included people of a person_type."""
+    if category not in BENEFIT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Categoria inválida.")
+    db = get_supabase()
+    data = _benefit_rows(db, month, person_type)
+    title = "Motoristas" if person_type == "driver" else "Funcionários"
+    xlsx = generate_benefit_payment_report(data, month, category, title)
+    return StreamingResponse(
+        io.BytesIO(xlsx),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=beneficio_{category}_{person_type}_{month}.xlsx"
+            )
+        },
+    )
+
+
+@router.get("/benefit-receipts-zip")
+def benefit_receipts_zip(month: str, category: str, person_type: str):
+    """ZIP of benefit receipt PDFs for everyone of a person_type who receives
+    this benefit. Only allowed once everyone is marked as paid."""
+    if category not in BENEFIT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Categoria inválida.")
+    db = get_supabase()
+    data = _benefit_rows(db, month, person_type)
+
+    recipients = [p for p in data if _benefit_value(p, category) > 0]
+    if not recipients:
+        raise HTTPException(
+            status_code=400, detail="Ninguém recebe este benefício no mês."
+        )
+
+    not_paid = [p for p in recipients if not p.get("paid_benefits")]
+    if not_paid:
+        names = ", ".join(p.get("person_name") or "—" for p in not_paid[:5])
+        extra = "..." if len(not_paid) > 5 else ""
+        raise HTTPException(
+            status_code=400,
+            detail=f"Marque todos como Pago antes de baixar. Faltam: {names}{extra}",
+        )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for p in recipients:
+            value = _benefit_value(p, category)
+            pdf = generate_benefit_receipt_pdf(
+                name=p.get("person_name") or "—",
+                cpf=p.get("person_cpf") or "—",
+                pix_key=p.get("pix_key"),
+                category=category,
+                amount=value,
+                payment_date=date_type.today(),
+                payroll_month=month,
+            )
+            cpf = (p.get("person_cpf") or "").replace(".", "").replace("-", "")
+            safe_name = (p.get("person_name") or "func").split(" ")[0]
+            z.writestr(f"comprovante_{category}_{safe_name}_{cpf}.pdf", pdf)
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=recibos_{category}_{person_type}_{month}.zip"
             )
         },
     )

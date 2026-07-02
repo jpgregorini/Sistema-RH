@@ -256,6 +256,8 @@ class AdvanceCreate(BaseModel):
 class PayrollUpdate(BaseModel):
     included_salary: bool | None = None
     included_benefits: bool | None = None
+    paid_salary: bool | None = None
+    paid_benefits: bool | None = None
 
 
 # --- Payroll ---

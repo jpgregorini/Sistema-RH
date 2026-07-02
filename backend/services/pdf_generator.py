@@ -148,13 +148,14 @@ def generate_advance_pdf(
     amount_words = _number_to_words_brl(amount)
     month_year_str = _format_payroll_month(payroll_month)
 
+    payer = f"{EMPLOYER['name']} (CNPJ {EMPLOYER['cnpj']})"
     has_installments = installments and len(installments) > 1
     if has_installments:
         n = len(installments)
         first_amount = float(installments[0]["amount"])
         body_text = (
             f"Eu, {name}, portador(a) do CPF {cpf}, declaro ter recebido da empresa "
-            f"Novalog Logística o valor de R$ {amount:,.2f} ({amount_words}) a título de "
+            f"{payer} o valor de R$ {amount:,.2f} ({amount_words}) a título de "
             f"adiantamento salarial, parcelado em {n}x de aproximadamente "
             f"R$ {first_amount:,.2f}, a ser descontado conforme o cronograma abaixo, "
             f"com vencimento no dia {payday} de cada mês de referência."
@@ -162,7 +163,7 @@ def generate_advance_pdf(
     else:
         body_text = (
             f"Eu, {name}, portador(a) do CPF {cpf}, declaro ter recebido da empresa "
-            f"Novalog Logística o valor de R$ {amount:,.2f} ({amount_words}) a título de "
+            f"{payer} o valor de R$ {amount:,.2f} ({amount_words}) a título de "
             f"adiantamento salarial, a ser descontado integralmente na folha de pagamento "
             f"referente ao mês de {month_year_str}, com vencimento no dia {payday} do referido mês."
         )
@@ -268,7 +269,10 @@ def generate_benefit_receipt_pdf(
     # Amount box
     y -= 1.6 * cm
     c.setFont("Helvetica-Bold", 22)
-    c.drawCentredString(width / 2, y, f"R$ {amount:,.2f}")
+    amount_brl = (
+        f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    )
+    c.drawCentredString(width / 2, y, amount_brl)
     y -= 0.6 * cm
     c.setFont("Helvetica-Oblique", 9)
     c.drawCentredString(width / 2, y, _number_to_words_brl(amount))
@@ -298,12 +302,19 @@ def generate_benefit_receipt_pdf(
     c.setFont("Helvetica", 10)
     c.drawString(margin + 3 * cm, y, BENEFICIO_LABELS.get(category, category))
 
+    y -= 0.55 * cm
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(margin, y, "Pago por:")
+    c.setFont("Helvetica", 10)
+    c.drawString(margin + 3 * cm, y, f"{EMPLOYER['name']} — CNPJ {EMPLOYER['cnpj']}")
+
     # Body text
     y -= 1.4 * cm
     body = (
-        f"Declaro, para os devidos fins, que recebi da empresa Novalog Logística o valor "
-        f"acima discriminado, a título de {BENEFICIO_LABELS.get(category, category).lower()}, "
-        f"referente ao mês de {ref_str}, mediante crédito em conta/PIX informado acima. "
+        f"Declaro, para os devidos fins, que recebi da empresa {EMPLOYER['name']} "
+        f"(CNPJ {EMPLOYER['cnpj']}) o valor acima discriminado, a título de "
+        f"{BENEFICIO_LABELS.get(category, category).lower()}, referente ao mês de {ref_str}, "
+        f"mediante crédito em conta/PIX informado acima. "
         f"Dou plena, geral e irrevogável quitação do referido valor."
     )
     c.setFont("Helvetica", 10)

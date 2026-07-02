@@ -243,6 +243,8 @@ export interface PayrollRecord {
   net_pay: number;
   included_salary: boolean;
   included_benefits: boolean;
+  paid_salary?: boolean;
+  paid_benefits?: boolean;
   person_name_snapshot?: string | null;
   person_cpf_snapshot?: string | null;
   breakdown: {
