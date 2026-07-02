@@ -508,20 +508,19 @@ def _draw_folha_ponto(c, width, height, name, cpf, funcao, ctps, month: str):
     c.drawString(left, yh, "Empregador")
     c.setFont("Helvetica", 9)
     c.drawString(left, yh - 13, f"Nome: {EMPLOYER['name']}")
-    c.drawString(left, yh - 26, f"Endereço: {EMPLOYER['endereco']}")
     c.setFont("Helvetica-Bold", 10)
     c.drawRightString(right, yh, f"Mês/Ano: {mes_ano}")
 
     # Header: Empregado
     c.setFont("Helvetica-BoldOblique", 9)
-    c.drawString(left, yh - 44, "Empregado")
+    c.drawString(left, yh - 31, "Empregado")
     c.setFont("Helvetica", 9)
-    c.drawString(left, yh - 57, f"Nome: {name or ''}")
-    c.drawString(left, yh - 70, f"Função: {funcao or ''}")
-    c.drawString(left + W / 2, yh - 57, f"CPF: {cpf or ''}")
-    c.drawString(left + W / 2, yh - 70, f"CTPS (nº e série): {ctps or ''}")
+    c.drawString(left, yh - 44, f"Nome: {name or ''}")
+    c.drawString(left, yh - 57, f"Função: {funcao or ''}")
+    c.drawString(left + W / 2, yh - 44, f"CPF: {cpf or ''}")
+    c.drawString(left + W / 2, yh - 57, f"CTPS (nº e série): {ctps or ''}")
 
-    top += 88
+    top += 74
 
     # Table
     cols = [

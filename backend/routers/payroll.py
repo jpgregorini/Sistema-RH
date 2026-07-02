@@ -177,6 +177,28 @@ def generate(data: PayrollCalculateRequest):
     return result.data[0]
 
 
+BULK_FIELDS = {"included_salary", "included_benefits", "paid_salary", "paid_benefits"}
+
+
+@router.post("/bulk-update")
+def bulk_update(month: str, person_type: str, field: str, value: bool):
+    """Set one include/paid flag for every payroll row of a person_type/month
+    in a single query (avoids many concurrent requests)."""
+    if field not in BULK_FIELDS:
+        raise HTTPException(status_code=400, detail="Campo inválido.")
+    if person_type not in ("driver", "employee"):
+        raise HTTPException(status_code=400, detail="person_type inválido.")
+    db = get_supabase()
+    result = (
+        db.table("payroll")
+        .update({field: value})
+        .eq("month", month)
+        .eq("person_type", person_type)
+        .execute()
+    )
+    return {"ok": True, "count": len(result.data or [])}
+
+
 @router.patch("/{payroll_id}")
 def update_payroll(payroll_id: str, data: PayrollUpdate):
     db = get_supabase()

@@ -159,11 +159,12 @@ export default function FolhaPage() {
 
   const [bulking, setBulking] = useState(false);
   const bulkSet = async (field: PatchField, value: boolean) => {
-    if (records.length === 0) return;
+    if (records.length === 0 || !person) return;
     setBulking(true);
     try {
-      await Promise.all(
-        records.map((r) => api.patch(`/api/payroll/${r.id}`, { [field]: value }))
+      // Single request updates all rows of this person_type/month.
+      await api.post(
+        `/api/payroll/bulk-update?month=${month}&person_type=${person}&field=${field}&value=${value}`
       );
       queryClient.invalidateQueries({ queryKey: ["payroll", month] });
       toast.success("Atualizado.");
