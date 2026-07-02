@@ -42,19 +42,9 @@ const TARGET_LABELS: Record<Target, string> = {
   custom: "Selecionar manualmente",
 };
 
-function nowLocalISO(): string {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
-
-function formatPunch(iso: string): string {
+function formatMonth(iso: string): string {
   const d = new Date(iso);
-  return (
-    d.toLocaleDateString("pt-BR") +
-    " " +
-    d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-  );
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 export default function HorariosPage() {
@@ -62,7 +52,7 @@ export default function HorariosPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  const [punchAt, setPunchAt] = useState(nowLocalISO());
+  const [month, setMonth] = useState(currentMonth);
   const [target, setTarget] = useState<Target>("all_drivers");
   const [customType, setCustomType] = useState<PersonType>("driver");
   const [selected, setSelected] = useState<Record<string, true>>({});
@@ -121,7 +111,7 @@ export default function HorariosPage() {
       return api.post<{ batch_id: string; count: number }>(
         "/api/time-records",
         {
-          punch_at: punchAt,
+          punch_at: `${month}-01T08:00:00`,
           target,
           people,
           notes: notes || null,
@@ -130,7 +120,7 @@ export default function HorariosPage() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["time-records-batches"] });
-      toast.success(`${result.count} comprovante(s) gerado(s).`);
+      toast.success(`${result.count} folha(s) de ponto gerada(s).`);
       setNotes("");
       setSelected({});
       window.open(
@@ -162,7 +152,7 @@ export default function HorariosPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Horários</h1>
         <p className="text-sm text-slate-500">
-          Gere comprovantes de ponto para um ou vários colaboradores
+          Gere folhas de ponto (mensais, em branco) para os colaboradores
         </p>
       </div>
 
@@ -170,7 +160,7 @@ export default function HorariosPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Clock className="h-4 w-4" />
-            Novo Comprovante
+            Nova Folha de Ponto
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -181,8 +171,8 @@ export default function HorariosPage() {
                 toast.error("Selecione pelo menos um colaborador.");
                 return;
               }
-              if (!punchAt) {
-                toast.error("Informe data e hora.");
+              if (!month) {
+                toast.error("Informe o mês.");
                 return;
               }
               createMutation.mutate();
@@ -190,20 +180,12 @@ export default function HorariosPage() {
             className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
           >
             <div className="space-y-2">
-              <Label>Data e Hora</Label>
+              <Label>Mês/Ano</Label>
               <Input
-                type="datetime-local"
-                value={punchAt}
-                onChange={(e) => setPunchAt(e.target.value)}
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setPunchAt(nowLocalISO())}
-              >
-                Usar agora
-              </Button>
             </div>
             <div className="space-y-2">
               <Label>Destinatários</Label>
@@ -229,7 +211,7 @@ export default function HorariosPage() {
               </Select>
               <p className="text-xs text-slate-500">
                 Vai gerar <span className="font-semibold">{previewCount}</span>{" "}
-                comprovante(s).
+                folha(s) de ponto.
               </p>
             </div>
             <div className="space-y-2 sm:col-span-2 lg:col-span-1">
@@ -301,7 +283,7 @@ export default function HorariosPage() {
               <Button type="submit" disabled={createMutation.isPending}>
                 {createMutation.isPending
                   ? "Gerando..."
-                  : "Gerar Comprovantes"}
+                  : "Gerar Folhas de Ponto"}
               </Button>
             </div>
           </form>
@@ -325,7 +307,7 @@ export default function HorariosPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Data/Hora</TableHead>
+              <TableHead>Mês/Ano</TableHead>
               <TableHead>Colaboradores</TableHead>
               <TableHead className="text-right">Qtd</TableHead>
               <TableHead>Observações</TableHead>
@@ -349,7 +331,7 @@ export default function HorariosPage() {
               batches.map((b) => (
                 <TableRow key={b.batch_id}>
                   <TableCell className="font-medium">
-                    {formatPunch(b.punch_at)}
+                    {formatMonth(b.punch_at)}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1 max-w-xl">

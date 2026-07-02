@@ -4,8 +4,11 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import date, datetime
+import calendar
 import io
 import os
+
+WEEKDAYS_PT_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
 
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "logo-novalog.png")
@@ -472,6 +475,133 @@ def generate_time_records_batch_pdf(records: list[dict]) -> bytes:
 
 
 # ============================================================
+# FOLHA DE PONTO (blank monthly timesheet)
+# ============================================================
+
+def _draw_folha_ponto(c, width, height, name, cpf, funcao, ctps, month: str):
+    left = 24
+    right = width - 24
+    W = right - left
+
+    # parse month
+    try:
+        y_i, m_i = int(month[:4]), int(month[5:7])
+    except Exception:
+        today = date.today()
+        y_i, m_i = today.year, today.month
+    days_in_month = calendar.monthrange(y_i, m_i)[1]
+    mes_ano = f"{m_i:02d}/{y_i}"
+
+    top = 24
+    # Title band
+    c.setFillColorRGB(0.14, 0.18, 0.28)
+    c.rect(left, height - top - 24, W, 24, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 15)
+    c.drawCentredString(width / 2, height - top - 17, "FOLHA DE PONTO")
+    c.setFillColorRGB(0, 0, 0)
+    top += 24
+
+    # Header: Empregador / Mês-Ano
+    yh = height - top - 14
+    c.setFont("Helvetica-BoldOblique", 9)
+    c.drawString(left, yh, "Empregador")
+    c.setFont("Helvetica", 9)
+    c.drawString(left, yh - 13, f"Nome: {EMPLOYER['name']}")
+    c.drawString(left, yh - 26, f"Endereço: {EMPLOYER['endereco']}")
+    c.setFont("Helvetica-Bold", 10)
+    c.drawRightString(right, yh, f"Mês/Ano: {mes_ano}")
+
+    # Header: Empregado
+    c.setFont("Helvetica-BoldOblique", 9)
+    c.drawString(left, yh - 44, "Empregado")
+    c.setFont("Helvetica", 9)
+    c.drawString(left, yh - 57, f"Nome: {name or ''}")
+    c.drawString(left, yh - 70, f"Função: {funcao or ''}")
+    c.drawString(left + W / 2, yh - 57, f"CPF: {cpf or ''}")
+    c.drawString(left + W / 2, yh - 70, f"CTPS (nº e série): {ctps or ''}")
+
+    top += 88
+
+    # Table
+    cols = [
+        ("Dia", 26),
+        ("Dia da Semana", 62),
+        ("Entrada", 58),
+        ("Almoço", 58),
+        ("Saída", 58),
+        ("Hora extra", 52),
+        ("Assinatura empregador", 0),
+        ("Assinatura trabalhador", 0),
+    ]
+    fixed = sum(w for _, w in cols if w)
+    remaining = W - fixed
+    sig_w = remaining / 2
+    widths = [w if w else sig_w for _, w in cols]
+
+    table_top = top
+    header_h = 26
+    n_rows = 31
+    avail = (height - 24) - table_top  # bottom margin 24
+    row_h = min(20, (avail - header_h) / n_rows)
+
+    # header row
+    c.setFont("Helvetica-Bold", 7.5)
+    x = left
+    yb = height - table_top - header_h
+    for (label, _), wdt in zip(cols, widths):
+        c.rect(x, yb, wdt, header_h)
+        for li, line in enumerate(simpleSplit(label, "Helvetica-Bold", 7.5, wdt - 4)):
+            c.drawCentredString(x + wdt / 2, yb + header_h - 10 - li * 8, line)
+        x += wdt
+
+    # day rows
+    c.setFont("Helvetica", 8)
+    for day in range(1, n_rows + 1):
+        row_y = height - table_top - header_h - day * row_h
+        x = left
+        for ci, wdt in enumerate(widths):
+            c.rect(x, row_y, wdt, row_h)
+            x += wdt
+        # Dia number
+        c.drawCentredString(left + widths[0] / 2, row_y + row_h / 2 - 3, str(day))
+        # Dia da semana (only for valid days)
+        if day <= days_in_month:
+            wd = WEEKDAYS_PT_SHORT[date(y_i, m_i, day).weekday()]
+            c.drawCentredString(left + widths[0] + widths[1] / 2, row_y + row_h / 2 - 3, wd)
+
+
+def generate_folha_ponto_pdf(name, cpf, funcao, ctps, month: str) -> bytes:
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    c.setLineWidth(0.5)
+    _draw_folha_ponto(c, width, height, name, cpf, funcao, ctps, month)
+    c.save()
+    return buffer.getvalue()
+
+
+def generate_folha_ponto_batch_pdf(records: list[dict]) -> bytes:
+    """One blank Folha de Ponto page per person. Each record: name, cpf,
+    funcao, ctps, month (YYYY-MM)."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    c.setLineWidth(0.5)
+    for i, rec in enumerate(records):
+        _draw_folha_ponto(
+            c, width, height,
+            rec.get("name"), rec.get("cpf"),
+            rec.get("funcao"), rec.get("ctps"),
+            rec.get("month") or date.today().strftime("%Y-%m"),
+        )
+        if i < len(records) - 1:
+            c.showPage()
+    c.save()
+    return buffer.getvalue()
+
+
+# ============================================================
 # REGISTRO DE EMPREGADO (JPX DO BRASIL)
 # ============================================================
 
@@ -496,12 +626,10 @@ REGISTRO_REQUIRED_EMPLOYEE = [
     ("pix_key", "Chave PIX"),
 ]
 REGISTRO_REQUIRED_RH = [
-    ("data_admissao", "Data de admissão"),
     ("base_salary", "Salário"),
     ("salario_por", "Por (Mês/Hora/...)"),
     ("horario_trabalho", "Horário de trabalho"),
     ("horario_intervalo", "Horário de intervalo"),
-    ("fgts_opcao_em", "FGTS - Opção em"),
 ]
 
 

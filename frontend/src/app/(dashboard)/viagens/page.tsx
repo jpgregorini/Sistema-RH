@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { formatBRL, formatDate, formatWeight } from "@/lib/format";
 import type { Trip, Driver } from "@/types";
 
@@ -32,6 +33,16 @@ export default function ViagensPage() {
   const { data: drivers = [] } = useQuery<Driver[]>({
     queryKey: ["drivers"],
     queryFn: () => api.get("/api/drivers"),
+  });
+
+  const queryClient = useQueryClient();
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/trips/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      toast.success("Viagem excluída.");
+    },
+    onError: () => toast.error("Erro ao excluir viagem."),
   });
 
   const driverCommissions = new Map<string, Map<string, number>>();
@@ -88,18 +99,19 @@ export default function ViagensPage() {
               <TableHead className="text-right">Peso Total</TableHead>
               <TableHead className="text-right">Valor Total</TableHead>
               <TableHead className="text-right">Comissão Total</TableHead>
+              <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-slate-400">
+                <TableCell colSpan={8} className="text-center py-8 text-slate-400">
                   Carregando...
                 </TableCell>
               </TableRow>
             ) : trips.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-slate-400">
+                <TableCell colSpan={8} className="text-center py-8 text-slate-400">
                   Nenhuma viagem encontrada neste mês.
                 </TableCell>
               </TableRow>
@@ -148,10 +160,23 @@ export default function ViagensPage() {
                       <TableCell className="text-right font-medium text-emerald-700">
                         {formatBRL(totalCommission)}
                       </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-700"
+                          title="Excluir viagem"
+                          onClick={() => {
+                            if (confirm("Excluir esta viagem?")) deleteMutation.mutate(trip.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                     {isExpanded && (
                       <TableRow key={`${trip.id}-detail`}>
-                        <TableCell colSpan={7} className="bg-slate-50 p-0">
+                        <TableCell colSpan={8} className="bg-slate-50 p-0">
                           <div className="px-12 py-3">
                             <table className="w-full text-sm">
                               <thead>

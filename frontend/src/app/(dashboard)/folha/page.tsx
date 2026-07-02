@@ -26,6 +26,7 @@ import {
   Users,
   FileSpreadsheet,
   Archive,
+  CheckSquare,
 } from "lucide-react";
 import { formatBRL } from "@/lib/format";
 import { toast } from "sonner";
@@ -109,9 +110,16 @@ export default function FolhaPage() {
       );
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err: Error, _v, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(["payroll", month], ctx.previous);
-      toast.error("Erro ao atualizar.");
+      let msg = "Erro ao atualizar.";
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed?.detail) msg = String(parsed.detail);
+      } catch {
+        if (err?.message) msg = err.message;
+      }
+      toast.error(msg);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["payroll", month] }),
   });
@@ -147,6 +155,29 @@ export default function FolhaPage() {
       else next.add(id);
       return next;
     });
+  };
+
+  const [bulking, setBulking] = useState(false);
+  const bulkSet = async (field: PatchField, value: boolean) => {
+    if (records.length === 0) return;
+    setBulking(true);
+    try {
+      await Promise.all(
+        records.map((r) => api.patch(`/api/payroll/${r.id}`, { [field]: value }))
+      );
+      queryClient.invalidateQueries({ queryKey: ["payroll", month] });
+      toast.success("Atualizado.");
+    } catch (err) {
+      let msg = "Erro ao atualizar em massa.";
+      try {
+        const parsed = JSON.parse((err as Error).message);
+        if (parsed?.detail) msg = String(parsed.detail);
+      } catch {
+        /* keep default message */
+      }
+      toast.error(msg);
+    }
+    setBulking(false);
   };
 
   const downloadReport = (cat: string) => {
@@ -292,6 +323,24 @@ export default function FolhaPage() {
           {scopeLabel} · {personLabel}
         </h1>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={bulking || records.length === 0}
+            onClick={() => bulkSet(scope === "salary" ? "included_salary" : "included_benefits", true)}
+          >
+            <CheckSquare className="h-4 w-4" />
+            Incluir todos
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2 text-emerald-700"
+            disabled={bulking || records.length === 0}
+            onClick={() => bulkSet(scope === "salary" ? "paid_salary" : "paid_benefits", true)}
+          >
+            <CheckSquare className="h-4 w-4" />
+            Todos pagos
+          </Button>
           <Button onClick={() => calculateScope(scope)} disabled={calculating !== null} className="gap-2">
             {calculating === scope ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
             {calculating === scope ? "Calculando..." : "Recalcular"}

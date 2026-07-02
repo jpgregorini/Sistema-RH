@@ -3,12 +3,31 @@ from fastapi.responses import StreamingResponse
 from database import get_supabase
 from models.schemas import TimeRecordCreate, TimeRecordTarget
 from services.pdf_generator import (
-    generate_time_record_pdf,
-    generate_time_records_batch_pdf,
+    generate_folha_ponto_pdf,
+    generate_folha_ponto_batch_pdf,
 )
 from datetime import datetime
 from uuid import uuid4
 import io
+
+
+def _employee_work_info(db, person_type: str, person_id: str) -> dict:
+    """funcao + CTPS (nº e série) for the folha de ponto header. Employees only."""
+    if person_type != "employee":
+        return {"funcao": None, "ctps": None}
+    row = (
+        db.table("employees")
+        .select("funcao, ctps, ctps_serie")
+        .eq("id", person_id)
+        .single()
+        .execute()
+    ).data
+    if not row:
+        return {"funcao": None, "ctps": None}
+    ctps = row.get("ctps") or ""
+    if row.get("ctps_serie"):
+        ctps = f"{ctps} / {row['ctps_serie']}".strip(" /")
+    return {"funcao": row.get("funcao"), "ctps": ctps or None}
 
 router = APIRouter()
 
@@ -187,20 +206,22 @@ def batch_pdf(batch_id: str):
     if not rows:
         raise HTTPException(status_code=404, detail="Lote não encontrado.")
 
-    records = [
-        {
+    records = []
+    for r in rows:
+        punch = datetime.fromisoformat(r["punch_at"].replace("Z", "+00:00"))
+        info = _employee_work_info(db, r["person_type"], r["person_id"])
+        records.append({
             "name": r["person_name_snapshot"],
             "cpf": r.get("person_cpf_snapshot"),
-            "punch_at": datetime.fromisoformat(r["punch_at"].replace("Z", "+00:00")),
-            "notes": r.get("notes"),
-        }
-        for r in rows
-    ]
-    pdf_bytes = generate_time_records_batch_pdf(records)
+            "funcao": info["funcao"],
+            "ctps": info["ctps"],
+            "month": punch.strftime("%Y-%m"),
+        })
+    pdf_bytes = generate_folha_ponto_batch_pdf(records)
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=horarios_{batch_id}.pdf"},
+        headers={"Content-Disposition": f"inline; filename=folha_ponto_{batch_id}.pdf"},
     )
 
 
@@ -216,16 +237,19 @@ def record_pdf(record_id: str):
     ).data
     if not r:
         raise HTTPException(status_code=404, detail="Registro não encontrado.")
-    pdf_bytes = generate_time_record_pdf(
+    punch = datetime.fromisoformat(r["punch_at"].replace("Z", "+00:00"))
+    info = _employee_work_info(db, r["person_type"], r["person_id"])
+    pdf_bytes = generate_folha_ponto_pdf(
         name=r["person_name_snapshot"],
         cpf=r.get("person_cpf_snapshot"),
-        punch_at=datetime.fromisoformat(r["punch_at"].replace("Z", "+00:00")),
-        notes=r.get("notes"),
+        funcao=info["funcao"],
+        ctps=info["ctps"],
+        month=punch.strftime("%Y-%m"),
     )
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=horario_{record_id}.pdf"},
+        headers={"Content-Disposition": f"inline; filename=folha_ponto_{record_id}.pdf"},
     )
 
 
