@@ -8,10 +8,18 @@ router = APIRouter()
 
 # Only these fields can be read/written through the public link.
 PUBLIC_FIELDS = [
-    "name", "cpf", "pix_key", "date_of_birth", "residencia", "local_nascimento",
-    "pais_nacionalidade", "estado_civil", "filiacao_pai", "filiacao_mae",
-    "orgao_emissor", "grau_instrucao", "sexo", "cor", "deficiencia",
-    "telefone_residencial", "telefone_celular",
+    "name", "cpf", "email", "pix_key", "date_of_birth", "residencia",
+    "local_nascimento", "pais_nacionalidade", "estado_civil", "filiacao_pai",
+    "filiacao_mae", "orgao_emissor", "grau_instrucao", "sexo", "cor",
+    "deficiencia", "telefone_residencial", "telefone_celular",
+    # Documents (optional)
+    "cedula_identidade", "rg_data_emissao", "titulo_eleitoral", "titulo_zona",
+    "titulo_secao", "inscr_orgao_classe", "ctps", "ctps_serie",
+    "ctps_data_expedicao", "ctps_uf", "cnh", "cnh_categoria", "doc_militar",
+    "doc_militar_categoria",
+    # PIS / bank (optional)
+    "pis_cadastrado_em", "pis_sob_n", "pis_domicilio_bancario", "pis_n_banco",
+    "pis_agencia_codigo", "pis_end_agencia",
 ]
 
 # Document kinds the employee can upload -> employee column.

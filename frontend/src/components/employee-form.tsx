@@ -29,7 +29,7 @@ type Mode = "manual" | "link";
 
 // All editable keys with sensible string defaults.
 const FIELD_KEYS = [
-  "name", "cpf", "pix_key", "date_of_birth", "residencia", "local_nascimento",
+  "name", "cpf", "email", "pix_key", "date_of_birth", "residencia", "local_nascimento",
   "pais_nacionalidade", "estado_civil", "filiacao_pai", "filiacao_mae",
   "orgao_emissor", "grau_instrucao", "sexo", "cor", "deficiencia",
   "telefone_residencial", "telefone_celular", "matricula_esocial",
@@ -349,6 +349,9 @@ export function EmployeeForm({ employee }: EmployeeFormProps) {
                 : undefined
             }
           >
+            <Field label="E-mail">
+              <Input type="email" value={form.email} onChange={(e) => set("email")(e.target.value)} placeholder="seu@email.com" />
+            </Field>
             <Field label="Data de Nascimento">
               <Input type="date" value={form.date_of_birth} onChange={(e) => set("date_of_birth")(e.target.value)} />
             </Field>

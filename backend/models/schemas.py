@@ -91,6 +91,7 @@ class EmployeeRegistrationFields(BaseModel):
     beneficiarios: str | None = None
 
     # Personal (employee-fillable)
+    email: str | None = None
     residencia: str | None = None
     local_nascimento: str | None = None
     pais_nacionalidade: str | None = None
@@ -186,6 +187,7 @@ class EmployeeUpdate(EmployeeRegistrationFields):
 class EmployeeRegistrationPublic(BaseModel):
     name: str | None = None
     cpf: str | None = None
+    email: str | None = None
     pix_key: str | None = None
     date_of_birth: date | None = None
     residencia: str | None = None
@@ -201,6 +203,28 @@ class EmployeeRegistrationPublic(BaseModel):
     deficiencia: str | None = None
     telefone_residencial: str | None = None
     telefone_celular: str | None = None
+    # Documents (optional)
+    cedula_identidade: str | None = None
+    rg_data_emissao: str | None = None
+    titulo_eleitoral: str | None = None
+    titulo_zona: str | None = None
+    titulo_secao: str | None = None
+    inscr_orgao_classe: str | None = None
+    ctps: str | None = None
+    ctps_serie: str | None = None
+    ctps_data_expedicao: str | None = None
+    ctps_uf: str | None = None
+    cnh: str | None = None
+    cnh_categoria: str | None = None
+    doc_militar: str | None = None
+    doc_militar_categoria: str | None = None
+    # PIS / bank (optional)
+    pis_cadastrado_em: str | None = None
+    pis_sob_n: str | None = None
+    pis_domicilio_bancario: str | None = None
+    pis_n_banco: str | None = None
+    pis_agencia_codigo: str | None = None
+    pis_end_agencia: str | None = None
 
 
 # --- Trip ---

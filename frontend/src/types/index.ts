@@ -59,6 +59,7 @@ export interface Employee {
   updated_at: string;
 
   // Registro de Empregado
+  email?: string | null;
   registration_mode?: string | null;
   registration_token?: string | null;
   registration_submitted_at?: string | null;

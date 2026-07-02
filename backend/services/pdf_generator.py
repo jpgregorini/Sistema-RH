@@ -479,6 +479,7 @@ def generate_time_records_batch_pdf(records: list[dict]) -> bytes:
 # Employee provides personal data; RH provides work data.
 REGISTRO_REQUIRED_EMPLOYEE = [
     ("name", "Nome do empregado"),
+    ("email", "E-mail"),
     ("residencia", "Residência"),
     ("date_of_birth", "Data de nascimento"),
     ("local_nascimento", "Local de nascimento"),

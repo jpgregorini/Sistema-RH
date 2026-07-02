@@ -28,11 +28,43 @@ const DOC_LABELS: { kind: string; label: string; optional?: boolean }[] = [
 ];
 
 const PUBLIC_FIELDS = [
-  "name", "cpf", "pix_key", "date_of_birth", "residencia", "local_nascimento",
-  "pais_nacionalidade", "estado_civil", "filiacao_pai", "filiacao_mae",
-  "orgao_emissor", "grau_instrucao", "sexo", "cor", "deficiencia",
-  "telefone_residencial", "telefone_celular",
+  "name", "cpf", "email", "pix_key", "date_of_birth", "residencia",
+  "local_nascimento", "pais_nacionalidade", "estado_civil", "filiacao_pai",
+  "filiacao_mae", "orgao_emissor", "grau_instrucao", "sexo", "cor",
+  "deficiencia", "telefone_residencial", "telefone_celular",
+  "cedula_identidade", "rg_data_emissao", "titulo_eleitoral", "titulo_zona",
+  "titulo_secao", "inscr_orgao_classe", "ctps", "ctps_serie",
+  "ctps_data_expedicao", "ctps_uf", "cnh", "cnh_categoria", "doc_militar",
+  "doc_militar_categoria",
+  "pis_cadastrado_em", "pis_sob_n", "pis_domicilio_bancario", "pis_n_banco",
+  "pis_agencia_codigo", "pis_end_agencia",
 ] as const;
+
+// Optional document / PIS fields rendered as extra sections.
+const DOC_FIELDS: { key: string; label: string }[] = [
+  { key: "cedula_identidade", label: "Cédula de Identidade (RG)" },
+  { key: "rg_data_emissao", label: "Data de emissão (RG)" },
+  { key: "titulo_eleitoral", label: "Título Eleitoral" },
+  { key: "titulo_zona", label: "Zona" },
+  { key: "titulo_secao", label: "Seção" },
+  { key: "inscr_orgao_classe", label: "Inscr. Órgão de Classe" },
+  { key: "ctps", label: "CTPS" },
+  { key: "ctps_serie", label: "Série CTPS" },
+  { key: "ctps_data_expedicao", label: "Data expedição CTPS" },
+  { key: "ctps_uf", label: "UF CTPS" },
+  { key: "cnh", label: "CNH" },
+  { key: "cnh_categoria", label: "Categoria CNH" },
+  { key: "doc_militar", label: "Doc. Militar" },
+  { key: "doc_militar_categoria", label: "Categoria (Militar)" },
+];
+const PIS_FIELDS: { key: string; label: string }[] = [
+  { key: "pis_cadastrado_em", label: "Cadastrado em" },
+  { key: "pis_sob_n", label: "Sob nº" },
+  { key: "pis_domicilio_bancario", label: "Domicílio bancário" },
+  { key: "pis_n_banco", label: "Nº banco" },
+  { key: "pis_agencia_codigo", label: "Agência código" },
+  { key: "pis_end_agencia", label: "End. da agência" },
+];
 
 export default function PublicRegistrationPage() {
   const params = useParams();
@@ -105,6 +137,7 @@ export default function PublicRegistrationPage() {
     const checks: [string, string][] = [
       ["name", "Nome"],
       ["cpf", "CPF"],
+      ["email", "E-mail"],
       ["residencia", "Residência"],
       ["date_of_birth", "Data de nascimento"],
       ["local_nascimento", "Local de nascimento"],
@@ -213,6 +246,14 @@ export default function PublicRegistrationPage() {
                     placeholder="000.000.000-00"
                   />
                 </Field>
+                <Field label="E-mail *" className="sm:col-span-2">
+                  <Input
+                    type="email"
+                    value={val("email")}
+                    onChange={(e) => set("email")(e.target.value)}
+                    placeholder="seu@email.com"
+                  />
+                </Field>
                 <Field label="Chave PIX *">
                   <Input value={val("pix_key")} onChange={(e) => set("pix_key")(e.target.value)} />
                 </Field>
@@ -282,8 +323,36 @@ export default function PublicRegistrationPage() {
 
             <Card className="mt-4">
               <CardContent className="p-6">
+                <p className="mb-1 text-sm font-semibold text-slate-700">Documentos (opcional)</p>
+                <p className="mb-4 text-xs text-slate-500">Preencha o que tiver em mãos.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {DOC_FIELDS.map(({ key, label }) => (
+                    <Field key={key} label={label}>
+                      <Input value={val(key)} onChange={(e) => set(key)(e.target.value)} />
+                    </Field>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+              <CardContent className="p-6">
+                <p className="mb-1 text-sm font-semibold text-slate-700">PIS / Banco (opcional)</p>
+                <p className="mb-4 text-xs text-slate-500">Preencha o que tiver em mãos.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {PIS_FIELDS.map(({ key, label }) => (
+                    <Field key={key} label={label}>
+                      <Input value={val(key)} onChange={(e) => set(key)(e.target.value)} />
+                    </Field>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+              <CardContent className="p-6">
                 <p className="mb-1 text-sm font-semibold text-slate-700">
-                  Documentos
+                  Anexos
                 </p>
                 <p className="mb-4 text-xs text-slate-500">
                   Anexe foto ou PDF dos documentos. Comprovante de Endereço e
